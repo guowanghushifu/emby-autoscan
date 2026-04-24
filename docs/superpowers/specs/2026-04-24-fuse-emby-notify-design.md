@@ -22,6 +22,7 @@ The program is a single static Go binary with a YAML configuration file. It runs
 Core units:
 
 - **Config loader** reads and validates Emby connection settings, scan interval, state file path, and monitor entries.
+- **Logger** writes timestamped logs to stdout and daily log files under a `logs` directory, retaining at most seven days of log files.
 - **Scanner** walks configured directories and builds file snapshots from path, size, and modification time.
 - **State store** loads and saves the latest snapshot so restarts do not treat all existing files as new.
 - **Change detector** compares previous and current snapshots and returns the set of changed Emby library IDs.
@@ -42,6 +43,10 @@ scan:
   state_file: "/var/lib/fuse-mount-emby-notify/state.json"
   notify_on_first_scan: false
 
+logging:
+  dir: "logs"
+  retention_days: 7
+
 monitors:
   - name: "movies"
     path: "/mnt/gd/sync/Movie"
@@ -58,9 +63,31 @@ Rules:
 
 - `scan.interval` uses Go duration syntax, such as `30s`, `5m`, or `1h`.
 - `scan.notify_on_first_scan` defaults to `false` to avoid a full Emby scan on first startup.
+- `logging.dir` defaults to `logs` relative to the current working directory when omitted.
+- `logging.retention_days` defaults to `7`; log files older than the retention window are removed at startup and after daily rotation.
 - Monitor `path` values must be absolute paths.
 - Monitor `library_id` values must be non-empty.
 - Multiple monitor entries may use the same `library_id`; notification is deduplicated per library ID after each scan cycle.
+
+## Logging
+
+The program logs every message to both stdout and a daily log file in the configured logs directory. Log files are named by date, for example `logs/2026-04-24.log`. Every log line includes a timestamp, level, event name, and key-value fields.
+
+Required log events:
+
+- Scan transaction start: scan cycle ID, start time, configured monitor count.
+- Scan transaction finish: scan cycle ID, end time, elapsed seconds, scanned monitor count, failed monitor count, changed library count.
+- File changes: scan cycle ID, monitor name, path, library ID, change type `added`, `modified`, or `deleted`, file size, and modification time when available.
+- Emby notification start: scan cycle ID, library ID, request URL path.
+- Emby notification finish: scan cycle ID, library ID, elapsed seconds, HTTP status or network error.
+- State persistence: scan cycle ID, state file path, success or failure.
+
+Log retention:
+
+- Logs are written by calendar day using the local timezone.
+- At most seven days of daily log files are kept by default.
+- Retention cleanup only deletes files matching the program's daily log filename pattern inside `logging.dir`.
+- stdout logging is always enabled even if file logging fails.
 
 ## Snapshot Semantics
 
@@ -112,6 +139,8 @@ fuse-mount-emby-notify -config /etc/fuse-mount-emby-notify/config.yaml
 
 It logs to stdout/stderr for systemd compatibility. It handles `SIGINT` and `SIGTERM` by stopping after the current scan cycle, saving any completed scan state before exit.
 
+The same timestamped application logs are also written to daily files under `logging.dir`.
+
 ## Deployment
 
 The repository should include:
@@ -120,6 +149,7 @@ The repository should include:
 - `config.example.yaml` with movie and TV examples.
 - `deploy/fuse-mount-emby-notify.service` as a systemd unit example.
 - Go tests for configuration validation, snapshot comparison, state persistence, and Emby client request generation.
+- Go tests for log file creation, stdout/file dual writing, daily filename selection, and seven-day retention cleanup.
 
 The build target should support static Linux binaries:
 
@@ -130,6 +160,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dis
 ## Error Handling
 
 - Invalid configuration exits with a clear error.
+- Log file creation failures are reported to stdout and do not prevent the daemon from running.
 - Missing monitor directories are logged and skipped for that cycle.
 - Partial scan errors prevent state updates for the affected monitor.
 - State file write failures are logged and retried on the next cycle.
@@ -141,6 +172,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dis
 - Scanner tests use temporary directories to verify add, delete, and modify detection.
 - State tests verify JSON load/save and missing-state behavior.
 - Emby client tests use `httptest.Server` to verify method, path, query, token header, and non-2xx handling.
+- Logger tests verify timestamped stdout output, daily file output, retention cleanup, and behavior when the log directory cannot be created.
 - Integration-style loop tests use a single scan step rather than sleeping daemon loops.
 
 ## Out of Scope
