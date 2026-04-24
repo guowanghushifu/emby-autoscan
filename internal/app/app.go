@@ -29,12 +29,17 @@ type Notifier interface {
 	RefreshLibrary(context.Context, string) error
 }
 
+type MountChecker interface {
+	RcloneMountRunning() (bool, error)
+}
+
 type App struct {
-	Config   config.Config
-	Scanner  Scanner
-	Store    Store
-	Notifier Notifier
-	Logger   *logging.Logger
+	Config       config.Config
+	Scanner      Scanner
+	Store        Store
+	Notifier     Notifier
+	MountChecker MountChecker
+	Logger       *logging.Logger
 }
 
 func (a *App) RunOnce(ctx context.Context, cycleID string) error {
@@ -44,6 +49,25 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 		logging.F("start_time", startedAt.Format(time.RFC3339)),
 		logging.F("monitor_count", len(a.Config.Monitors)),
 	)
+
+	if a.MountChecker != nil {
+		running, err := a.MountChecker.RcloneMountRunning()
+		if err != nil {
+			a.logError("rclone_mount_check_failed", "检测 rclone mount 进程失败，跳过本轮扫描",
+				logging.F("cycle_id", cycleID),
+				logging.F("error", err),
+			)
+			return nil
+		}
+		if !running {
+			a.logError("rclone_mount_missing", "未检测到 rclone mount 进程，跳过本轮扫描",
+				logging.F("cycle_id", cycleID),
+				logging.F("rclone_exe", "/usr/bin/rclone"),
+				logging.F("rclone_command", "mount"),
+			)
+			return nil
+		}
+	}
 
 	previous, exists, err := a.Store.Load()
 	if err != nil {

@@ -114,6 +114,8 @@ The unit uses `StateDirectory=emby-autoscan`, so systemd creates `/var/lib/emby-
 
 The generic unit only waits for `network-online.target`; it does not wait for your actual media mount units. If the service starts before the FUSE/rclone mounts are ready, scans may fail, or an empty first baseline may make later existing files look like new changes. Add `Requires=` and `After=` entries for your mount unit, or start this service only after your rclone mount process is ready.
 
+At runtime, each scan cycle also checks whether a `/usr/bin/rclone mount` process is running. If it is missing, the daemon logs the condition and skips that cycle without reading state, scanning directories, saving state, or notifying Emby; the next cycle checks again.
+
 The service user must also be able to traverse every configured `monitors[].path`. For user-mounted rclone/FUSE paths, either run this service as the same user that owns the mount, or configure FUSE/rclone access appropriately, such as `allow_other` with the required `/etc/fuse.conf` setting.
 
 Useful operational commands:

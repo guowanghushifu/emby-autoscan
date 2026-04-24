@@ -15,6 +15,7 @@ import (
 	"github.com/guowanghushifu/emby-autoscan/internal/config"
 	"github.com/guowanghushifu/emby-autoscan/internal/emby"
 	"github.com/guowanghushifu/emby-autoscan/internal/logging"
+	"github.com/guowanghushifu/emby-autoscan/internal/rclone"
 	"github.com/guowanghushifu/emby-autoscan/internal/snapshot"
 	"github.com/guowanghushifu/emby-autoscan/internal/state"
 )
@@ -67,9 +68,10 @@ func run(args []string) int {
 	defer stop()
 
 	daemon := app.App{
-		Config:  cfg,
-		Scanner: FileScanner{},
-		Store:   state.Store{Path: cfg.Scan.StateFile},
+		Config:       cfg,
+		Scanner:      FileScanner{},
+		Store:        state.Store{Path: cfg.Scan.StateFile},
+		MountChecker: rclone.ProcMountChecker{},
 		Notifier: emby.Client{
 			BaseURL: cfg.Emby.URL,
 			APIKey:  cfg.Emby.APIKey,

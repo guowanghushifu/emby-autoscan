@@ -219,6 +219,46 @@ func TestRunOnceDropsRemovedConfiguredMonitorFromSavedState(t *testing.T) {
 	}
 }
 
+func TestRunOnceSkipsScanWhenRcloneMountIsNotRunning(t *testing.T) {
+	var logs bytes.Buffer
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+	}}
+	store := &fakeStore{}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{}, scanner, store, notifier, &logs)
+	app.MountChecker = fakeMountChecker{running: false}
+
+	if err := app.RunOnce(context.Background(), "cycle-rclone-down"); err != nil {
+		t.Fatalf("RunOnce() error = %v, want nil", err)
+	}
+
+	if store.loadCount != 0 {
+		t.Fatalf("Load() count = %d, want 0", store.loadCount)
+	}
+	if len(scanner.monitors) != 0 {
+		t.Fatalf("scanned monitors = %#v, want none", scanner.monitors)
+	}
+	if store.saveCount != 0 {
+		t.Fatalf("Save() count = %d, want 0", store.saveCount)
+	}
+	if len(notifier.libraryIDs) != 0 {
+		t.Fatalf("notified library IDs = %#v, want none", notifier.libraryIDs)
+	}
+
+	output := logs.String()
+	wantParts := []string{
+		"event=rclone_mount_missing",
+		"msg=\"未检测到 rclone mount 进程，跳过本轮扫描\"",
+		"cycle_id=cycle-rclone-down",
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(output, part) {
+			t.Fatalf("logs missing %q in:\n%s", part, output)
+		}
+	}
+}
+
 func TestRunWithAlreadyCanceledContextDoesNotScanAndReturnsCanceled(t *testing.T) {
 	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
 		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
@@ -522,6 +562,15 @@ type fakeNotifier struct {
 	libraryIDs []string
 	err        error
 	errors     map[string]error
+}
+
+type fakeMountChecker struct {
+	running bool
+	err     error
+}
+
+func (f fakeMountChecker) RcloneMountRunning() (bool, error) {
+	return f.running, f.err
 }
 
 func (f *fakeNotifier) RefreshLibrary(ctx context.Context, libraryID string) error {
