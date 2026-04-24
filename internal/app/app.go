@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/config"
+	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/emby"
 	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/logging"
 	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/snapshot"
 )
@@ -18,6 +20,10 @@ type Scanner interface {
 type Store interface {
 	Load() (snapshot.State, bool, error)
 	Save(snapshot.State) error
+}
+
+type stateFilePathStore interface {
+	StateFilePath() string
 }
 
 type Notifier interface {
@@ -34,7 +40,11 @@ type App struct {
 
 func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 	startedAt := time.Now()
-	a.logInfo("scan_start", "开始执行目录检测", logging.F("cycle_id", cycleID))
+	a.logInfo("scan_start", "开始执行目录检测",
+		logging.F("cycle_id", cycleID),
+		logging.F("start_time", startedAt.Format(time.RFC3339)),
+		logging.F("monitor_count", len(a.Config.Monitors)),
+	)
 
 	previous, exists, err := a.Store.Load()
 	if err != nil {
@@ -80,38 +90,66 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 	}
 
 	changedLibraryIDs := snapshot.ChangedLibraryIDs(allChanges)
+	logScanFinish := func() {
+		endedAt := time.Now()
+		a.logInfo("scan_finish", "目录检测完成",
+			logging.F("cycle_id", cycleID),
+			logging.F("end_time", endedAt.Format(time.RFC3339)),
+			logging.F("elapsed_seconds", endedAt.Sub(startedAt).Seconds()),
+			logging.F("scanned_monitor_count", scannedMonitorCount),
+			logging.F("failed_monitor_count", failedMonitorCount),
+			logging.F("changed_library_count", len(changedLibraryIDs)),
+		)
+	}
+
+	notifyErrors := make([]error, 0)
 	for _, libraryID := range changedLibraryIDs {
+		notifyStartedAt := time.Now()
+		requestPath := emby.RefreshPath(libraryID)
 		a.logInfo("notify_start", "开始通知 Emby 扫描媒体库",
 			logging.F("cycle_id", cycleID),
 			logging.F("library_id", libraryID),
+			logging.F("request_path", requestPath),
 		)
 		if err := a.Notifier.RefreshLibrary(ctx, libraryID); err != nil {
 			a.logError("notify_failed", "通知 Emby 扫描媒体库失败",
 				logging.F("cycle_id", cycleID),
 				logging.F("library_id", libraryID),
+				logging.F("request_path", requestPath),
+				logging.F("elapsed_seconds", time.Since(notifyStartedAt).Seconds()),
 				logging.F("error", err),
 			)
-			return fmt.Errorf("notify library %s: %w", libraryID, err)
+			notifyErrors = append(notifyErrors, fmt.Errorf("notify library %s: %w", libraryID, err))
+			continue
 		}
 		a.logInfo("notify_success", "通知 Emby 扫描媒体库成功",
 			logging.F("cycle_id", cycleID),
 			logging.F("library_id", libraryID),
+			logging.F("request_path", requestPath),
+			logging.F("elapsed_seconds", time.Since(notifyStartedAt).Seconds()),
+			logging.F("status", "success"),
 		)
 	}
 
 	if err := a.Store.Save(next); err != nil {
-		return fmt.Errorf("save snapshot state: %w", err)
+		a.logError("state_save", "扫描状态保存失败",
+			logging.F("cycle_id", cycleID),
+			logging.F("state_file", a.stateFilePath()),
+			logging.F("success", false),
+			logging.F("error", err),
+		)
+		logScanFinish()
+		return nil
 	}
-
-	a.logInfo("scan_finish", "目录检测完成",
+	a.logInfo("state_save", "扫描状态保存成功",
 		logging.F("cycle_id", cycleID),
-		logging.F("elapsed_seconds", time.Since(startedAt).Seconds()),
-		logging.F("scanned_monitor_count", scannedMonitorCount),
-		logging.F("failed_monitor_count", failedMonitorCount),
-		logging.F("changed_library_count", len(changedLibraryIDs)),
+		logging.F("state_file", a.stateFilePath()),
+		logging.F("success", true),
 	)
 
-	return nil
+	logScanFinish()
+
+	return errors.Join(notifyErrors...)
 }
 
 func (a *App) Run(ctx context.Context) error {
@@ -199,4 +237,15 @@ func (a *App) logError(event, message string, fields ...logging.Field) {
 	if a.Logger != nil {
 		a.Logger.Error(event, message, fields...)
 	}
+}
+
+func (a *App) stateFilePath() string {
+	if a.Config.Scan.StateFile != "" {
+		return a.Config.Scan.StateFile
+	}
+	store, ok := a.Store.(stateFilePathStore)
+	if !ok {
+		return ""
+	}
+	return store.StateFilePath()
 }

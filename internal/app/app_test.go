@@ -79,6 +79,91 @@ func TestRunOnceDeduplicatesSameLibraryAcrossMonitors(t *testing.T) {
 	}
 }
 
+func TestRunOnceNotificationFailureStillSavesStateAndContinues(t *testing.T) {
+	var logs bytes.Buffer
+	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies"),
+		"Movie2": monitorSnapshot("Movie2", "library-shows"),
+	}}
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+		"Movie2": monitorSnapshot("Movie2", "library-shows", fileInfo("/media/movie2.mkv", 200, 2000)),
+	}}
+	store := &fakeStore{state: previous, exists: true}
+	notifier := &fakeNotifier{errors: map[string]error{"library-movies": errors.New("emby unavailable")}}
+	app := newTestApp(t, config.ScanConfig{}, scanner, store, notifier, &logs)
+
+	if err := app.RunOnce(context.Background(), "cycle-notify-fail"); err == nil {
+		t.Fatalf("RunOnce() error = nil, want notification error")
+	}
+
+	if store.saveCount != 1 {
+		t.Fatalf("Save() count = %d, want 1", store.saveCount)
+	}
+	wantLibraries := []string{"library-movies", "library-shows"}
+	if !reflect.DeepEqual(notifier.libraryIDs, wantLibraries) {
+		t.Fatalf("notified library IDs = %#v, want %#v", notifier.libraryIDs, wantLibraries)
+	}
+	assertSavedMonitors(t, store, []string{"Movie1", "Movie2"})
+	if got := store.saved.Monitors["Movie1"]; !reflect.DeepEqual(got, scanner.snapshots["Movie1"]) {
+		t.Fatalf("saved Movie1 snapshot = %#v, want %#v", got, scanner.snapshots["Movie1"])
+	}
+
+	output := logs.String()
+	wantParts := []string{
+		"event=notify_start",
+		"library_id=library-movies",
+		"request_path=/emby/Items/library-movies/Refresh",
+		"event=notify_failed",
+		"elapsed_seconds=",
+		"error=\"emby unavailable\"",
+		"library_id=library-shows",
+		"event=notify_success",
+		"status=success",
+		"event=state_save",
+		"success=true",
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(output, part) {
+			t.Fatalf("logs missing %q in:\n%s", part, output)
+		}
+	}
+}
+
+func TestRunOnceStateSaveFailureLogsAndReturnsNil(t *testing.T) {
+	var logs bytes.Buffer
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+	}}
+	store := &fakeStore{saveErr: errors.New("disk full")}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{NotifyOnFirstScan: false, StateFile: "/tmp/state.json"}, scanner, store, notifier, &logs)
+
+	if err := app.RunOnce(context.Background(), "cycle-save-fail"); err != nil {
+		t.Fatalf("RunOnce() error = %v, want nil", err)
+	}
+	if store.saveCount != 1 {
+		t.Fatalf("Save() count = %d, want 1", store.saveCount)
+	}
+
+	output := logs.String()
+	wantParts := []string{
+		"event=state_save",
+		"msg=\"扫描状态保存失败\"",
+		"cycle_id=cycle-save-fail",
+		"state_file=/tmp/state.json",
+		"success=false",
+		"error=\"disk full\"",
+		"event=scan_finish",
+		"changed_library_count=0",
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(output, part) {
+			t.Fatalf("logs missing %q in:\n%s", part, output)
+		}
+	}
+}
+
 func TestRunOnceSkipsStateUpdateForFailedMonitor(t *testing.T) {
 	oldMovie1 := monitorSnapshot("Movie1", "library-movies", fileInfo("/media/old.mkv", 10, 10))
 	oldMovie2 := monitorSnapshot("Movie2", "library-shows", fileInfo("/media/old-episode.mkv", 20, 20))
@@ -211,6 +296,8 @@ func TestRunOnceLogsChineseScanChangeAndNotifyMessages(t *testing.T) {
 		"event=scan_start",
 		"msg=\"开始执行目录检测\"",
 		"cycle_id=cycle-4",
+		"start_time=",
+		"monitor_count=1",
 		"event=file_change",
 		"msg=\"检测到文件新增\"",
 		"msg=\"检测到文件修改\"",
@@ -222,9 +309,15 @@ func TestRunOnceLogsChineseScanChangeAndNotifyMessages(t *testing.T) {
 		"size=30",
 		"mod_time=30",
 		"msg=\"开始通知 Emby 扫描媒体库\"",
+		"request_path=/emby/Items/library-movies/Refresh",
 		"msg=\"通知 Emby 扫描媒体库成功\"",
+		"status=success",
+		"event=state_save",
+		"msg=\"扫描状态保存成功\"",
+		"success=true",
 		"event=scan_finish",
 		"msg=\"目录检测完成\"",
+		"end_time=",
 		"elapsed_seconds=",
 		"scanned_monitor_count=1",
 		"failed_monitor_count=0",
@@ -382,6 +475,7 @@ func (f *fakeStore) Save(state snapshot.State) error {
 type fakeNotifier struct {
 	libraryIDs []string
 	err        error
+	errors     map[string]error
 }
 
 func (f *fakeNotifier) RefreshLibrary(ctx context.Context, libraryID string) error {
@@ -389,5 +483,8 @@ func (f *fakeNotifier) RefreshLibrary(ctx context.Context, libraryID string) err
 		return err
 	}
 	f.libraryIDs = append(f.libraryIDs, libraryID)
+	if err := f.errors[libraryID]; err != nil {
+		return err
+	}
 	return f.err
 }
