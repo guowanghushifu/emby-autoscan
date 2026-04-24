@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -122,6 +123,37 @@ func TestChangedLibrariesAreDeduplicated(t *testing.T) {
 	}
 }
 
+func TestChangeJSONFieldNames(t *testing.T) {
+	data, err := json.Marshal(Change{
+		MonitorName: "movies",
+		LibraryID:   "library-1",
+		Path:        "/media/movie.mkv",
+		Type:        "added",
+		Size:        42,
+		ModTime:     123456789,
+	})
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+
+	var fields map[string]any
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+
+	wantFields := []string{"monitor_name", "library_id", "path", "type", "size", "mod_time"}
+	for _, field := range wantFields {
+		if _, ok := fields[field]; !ok {
+			t.Fatalf("marshaled Change missing field %q in %s", field, data)
+		}
+	}
+	for field := range fields {
+		if !contains(wantFields, field) {
+			t.Fatalf("marshaled Change contains unexpected field %q in %s", field, data)
+		}
+	}
+}
+
 func TestScanMissingDirectoryReturnsErrorWithoutSnapshot(t *testing.T) {
 	missingPath := filepath.Join(t.TempDir(), "missing")
 
@@ -132,4 +164,13 @@ func TestScanMissingDirectoryReturnsErrorWithoutSnapshot(t *testing.T) {
 	if snapshot.Files != nil || snapshot.MonitorName != "" || snapshot.Path != "" || snapshot.LibraryID != "" {
 		t.Fatalf("ScanMonitor() snapshot = %#v, want zero value", snapshot)
 	}
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }

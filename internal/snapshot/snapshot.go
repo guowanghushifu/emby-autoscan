@@ -31,12 +31,12 @@ type State struct {
 }
 
 type Change struct {
-	MonitorName string
-	LibraryID   string
-	Path        string
-	Type        string
-	Size        int64
-	ModTime     int64
+	MonitorName string `json:"monitor_name"`
+	LibraryID   string `json:"library_id"`
+	Path        string `json:"path"`
+	Type        string `json:"type"`
+	Size        int64  `json:"size"`
+	ModTime     int64  `json:"mod_time"`
 }
 
 func ScanMonitor(name, root, libraryID string) (MonitorSnapshot, error) {
