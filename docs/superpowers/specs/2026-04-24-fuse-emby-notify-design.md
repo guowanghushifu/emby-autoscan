@@ -71,16 +71,16 @@ Rules:
 
 ## Logging
 
-The program logs every message to both stdout and a daily log file in the configured logs directory. Log files are named by date, for example `logs/2026-04-24.log`. Every log line includes a timestamp, level, event name, and key-value fields.
+The program logs every message to both stdout and a daily log file in the configured logs directory. Log files are named by date, for example `logs/2026-04-24.log`. Every log line includes a timestamp, level, event name, Chinese human-readable message, and key-value fields. Event names and field keys remain stable ASCII identifiers so logs are easy to filter with command-line tools, while the message text is written in Chinese for operators.
 
 Required log events:
 
-- Scan transaction start: scan cycle ID, start time, configured monitor count.
-- Scan transaction finish: scan cycle ID, end time, elapsed seconds, scanned monitor count, failed monitor count, changed library count.
-- File changes: scan cycle ID, monitor name, path, library ID, change type `added`, `modified`, or `deleted`, file size, and modification time when available.
-- Emby notification start: scan cycle ID, library ID, request URL path.
-- Emby notification finish: scan cycle ID, library ID, elapsed seconds, HTTP status or network error.
-- State persistence: scan cycle ID, state file path, success or failure.
+- Scan transaction start: Chinese message such as `开始执行目录检测`, plus scan cycle ID, start time, configured monitor count.
+- Scan transaction finish: Chinese message such as `目录检测完成`, plus scan cycle ID, end time, elapsed seconds, scanned monitor count, failed monitor count, changed library count.
+- File changes: Chinese message such as `检测到文件新增`, `检测到文件修改`, or `检测到文件删除`, plus scan cycle ID, monitor name, path, library ID, change type `added`, `modified`, or `deleted`, file size, and modification time when available.
+- Emby notification start: Chinese message such as `开始通知 Emby 扫描媒体库`, plus scan cycle ID, library ID, request URL path.
+- Emby notification finish: Chinese message such as `Emby 媒体库扫描通知完成` or `Emby 媒体库扫描通知失败`, plus scan cycle ID, library ID, elapsed seconds, HTTP status or network error.
+- State persistence: Chinese message such as `扫描状态保存成功` or `扫描状态保存失败`, plus scan cycle ID, state file path, success or failure.
 
 Log retention:
 
