@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -36,8 +37,12 @@ func run(args []string) int {
 		return 2
 	}
 	if *configPath == "" {
-		fmt.Fprintln(os.Stderr, "错误：必须指定非空 -config 配置文件路径")
-		return 2
+		defaultPath, err := defaultConfigPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "查找默认配置失败：%v\n", err)
+			return 1
+		}
+		*configPath = defaultPath
 	}
 
 	cfg, err := config.Load(*configPath)
@@ -82,4 +87,12 @@ func run(args []string) int {
 	}
 
 	return 0
+}
+
+func defaultConfigPath() (string, error) {
+	executablePath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(executablePath), "config.yaml"), nil
 }

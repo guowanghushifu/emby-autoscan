@@ -244,6 +244,28 @@ func TestRunWithAlreadyCanceledContextDoesNotScanAndReturnsCanceled(t *testing.T
 	}
 }
 
+func TestRunLogsCycleErrorAndRetriesUntilCanceled(t *testing.T) {
+	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/old.mkv", 10, 10)),
+	}}
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/new.mkv", 20, 20)),
+	}}
+	store := &fakeStore{state: previous, exists: true}
+	notifier := &fakeNotifier{err: errors.New("emby unavailable")}
+	app := newTestApp(t, config.ScanConfig{Interval: time.Millisecond}, scanner, store, notifier, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	err := app.Run(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run() error = %v, want context deadline after retry window", err)
+	}
+	if len(scanner.monitors) < 2 {
+		t.Fatalf("scanned monitors = %#v, want retry after first cycle error", scanner.monitors)
+	}
+}
+
 func TestRunRejectsNonPositiveIntervalWithoutPanic(t *testing.T) {
 	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
 		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),

@@ -59,16 +59,22 @@ Human-readable log messages are written in Chinese for operators, while event na
 
 ## Build
 
-Build a static Linux amd64 binary from the repository root:
+Build static Linux amd64 and arm64 binaries from the repository root:
 
 ```sh
 ./build.sh
 ```
 
-The script writes `dist/emby-autoscan-linux-amd64` by default. You can override target and output values:
+The script writes `dist/emby-autoscan-linux-amd64` and `dist/emby-autoscan-linux-arm64` by default. You can override target and output values for a single build:
 
 ```sh
 GOOS=linux GOARCH=arm64 OUTPUT=dist/emby-autoscan-arm64 ./build.sh
+```
+
+You can also override the default architecture list:
+
+```sh
+TARGET_ARCHES="amd64 arm64" ./build.sh
 ```
 
 Equivalent manual command:

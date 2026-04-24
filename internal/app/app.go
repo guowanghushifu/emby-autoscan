@@ -161,7 +161,10 @@ func (a *App) Run(ctx context.Context) error {
 	}
 
 	if err := a.RunOnce(ctx, newCycleID()); err != nil {
-		return err
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		a.logError("scan_cycle_failed", "本轮目录检测失败，将等待下一个周期重试", logging.F("error", err))
 	}
 
 	ticker := time.NewTicker(a.Config.Scan.Interval)
@@ -173,7 +176,10 @@ func (a *App) Run(ctx context.Context) error {
 			return ctx.Err()
 		case <-ticker.C:
 			if err := a.RunOnce(ctx, newCycleID()); err != nil {
-				return err
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return ctxErr
+				}
+				a.logError("scan_cycle_failed", "本轮目录检测失败，将等待下一个周期重试", logging.F("error", err))
 			}
 		}
 	}
