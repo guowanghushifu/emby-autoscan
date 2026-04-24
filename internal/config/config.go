@@ -116,6 +116,9 @@ func normalize(raw rawConfig) (Config, error) {
 		if err != nil {
 			return Config{}, fmt.Errorf("scan.interval must be a valid duration: %w", err)
 		}
+		if parsed <= 0 {
+			return Config{}, fmt.Errorf("scan.interval must be positive")
+		}
 		cfg.Scan.Interval = parsed
 	}
 	if stateFile := strings.TrimSpace(raw.Scan.StateFile); stateFile != "" {
@@ -126,6 +129,9 @@ func normalize(raw rawConfig) (Config, error) {
 		cfg.Logging.Dir = loggingDir
 	}
 	if raw.Logging.RetentionDays != nil {
+		if *raw.Logging.RetentionDays <= 0 {
+			return Config{}, fmt.Errorf("logging.retention_days must be positive")
+		}
 		cfg.Logging.RetentionDays = *raw.Logging.RetentionDays
 	}
 

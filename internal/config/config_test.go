@@ -96,6 +96,69 @@ monitors:
 	}
 }
 
+func TestLoadRejectsNonPositiveInterval(t *testing.T) {
+	tests := []struct {
+		name     string
+		interval string
+	}{
+		{name: "zero", interval: "0s"},
+		{name: "negative", interval: "-1s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeConfig(t, `
+emby:
+  url: http://localhost:8096
+  api_key: secret
+scan:
+  interval: `+tt.interval+`
+monitors:
+  - name: movies
+    path: /mnt/gd/sync/Movie1
+    library_id: library-a
+`)
+
+			_, err := Load(path)
+			if err == nil || !strings.Contains(err.Error(), "scan.interval") || !strings.Contains(err.Error(), "positive") {
+				t.Fatalf("Load() error = %v, want positive scan.interval error", err)
+			}
+		})
+	}
+}
+
+func TestLoadRejectsNonPositiveRetentionDays(t *testing.T) {
+	tests := []struct {
+		name          string
+		retentionDays string
+	}{
+		{name: "zero", retentionDays: "0"},
+		{name: "negative", retentionDays: "-1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeConfig(t, `
+emby:
+  url: http://localhost:8096
+  api_key: secret
+scan: {}
+logging:
+  retention_days: `+tt.retentionDays+`
+monitors:
+  - name: movies
+    path: /mnt/gd/sync/Movie1
+    library_id: library-a
+`)
+
+			_, err := Load(path)
+			if err == nil || !strings.Contains(err.Error(), "logging.retention_days") || !strings.Contains(err.Error(), "positive") {
+				t.Fatalf("Load() error = %v, want positive logging.retention_days error", err)
+			}
+		})
+	}
+}
+
 func TestLoadRejectsMissingEmbySettings(t *testing.T) {
 	path := writeConfig(t, `
 emby:
