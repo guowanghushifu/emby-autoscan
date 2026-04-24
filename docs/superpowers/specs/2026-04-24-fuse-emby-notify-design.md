@@ -13,7 +13,7 @@ Example media layout:
 - `/mnt/gd/sync/Movie` contains movies.
 - `/mnt/gd/sync/TV` contains TV shows.
 
-Each monitored directory maps to one Emby library ID. During a scan cycle, if any file under a mapped directory changes, the program sends at most one refresh request for that library.
+Each monitored directory maps to one Emby library ID, and multiple directories may map to the same library ID. During a scan cycle, if any file under any directory mapped to a library changes, the program sends at most one refresh request for that library.
 
 ## Architecture
 
@@ -46,6 +46,9 @@ monitors:
   - name: "movies"
     path: "/mnt/gd/sync/Movie"
     library_id: "movie-library-id"
+  - name: "movies-extra"
+    path: "/mnt/gd/sync/Movie2"
+    library_id: "movie-library-id"
   - name: "tv"
     path: "/mnt/gd/sync/TV"
     library_id: "tv-library-id"
@@ -57,6 +60,7 @@ Rules:
 - `scan.notify_on_first_scan` defaults to `false` to avoid a full Emby scan on first startup.
 - Monitor `path` values must be absolute paths.
 - Monitor `library_id` values must be non-empty.
+- Multiple monitor entries may use the same `library_id`; notification is deduplicated per library ID after each scan cycle.
 
 ## Snapshot Semantics
 
@@ -70,13 +74,14 @@ Directories, symlinks, sockets, devices, and other non-regular entries are ignor
 
 ## Change Detection
 
-A library is considered changed when any regular file under its monitor path is added, deleted, or has a different size or modification time compared with the previous persisted snapshot.
+A monitor is considered changed when any regular file under its path is added, deleted, or has a different size or modification time compared with the previous persisted snapshot. A library is considered changed when at least one monitor mapped to that library ID changed.
 
 Notification behavior:
 
 - One scan cycle can notify multiple libraries.
 - Each library is notified at most once per scan cycle.
-- If no files changed for a library, no request is sent for that library.
+- If multiple changed monitor paths map to the same library ID, only one request is sent for that library.
+- If no files changed for any monitor mapped to a library, no request is sent for that library.
 - After a successful scan cycle, the current snapshot is persisted.
 
 First-start behavior:
