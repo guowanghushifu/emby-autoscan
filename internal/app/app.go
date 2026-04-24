@@ -44,11 +44,6 @@ type App struct {
 
 func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 	startedAt := time.Now()
-	a.logInfo("scan_start", "开始执行目录检测",
-		logging.F("cycle_id", cycleID),
-		logging.F("start_time", startedAt.Format(time.RFC3339)),
-		logging.F("monitor_count", len(a.Config.Monitors)),
-	)
 
 	if a.MountChecker != nil {
 		running, err := a.MountChecker.RcloneMountRunning()
@@ -107,33 +102,39 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 
 		changes := changesForMonitor(previous.Monitors[monitor.Name], current, exists, a.Config.Scan.NotifyOnFirstScan)
 		for _, change := range changes {
-			logFileChange(a, cycleID, change)
+			if change.Type == snapshot.ChangeAdded {
+				logFileChange(a, cycleID, change)
+			}
 		}
 		allChanges = append(allChanges, changes...)
 	}
 
 	changedLibraryIDs := snapshot.ChangedLibraryIDs(allChanges)
-	logScanFinish := func() {
+	notifySuccessCount := 0
+	notifyFailedCount := 0
+	logScanSummary := func() {
 		endedAt := time.Now()
-		a.logInfo("scan_finish", "目录检测完成",
+		addedCount, modifiedCount, deletedCount := changeCounts(allChanges)
+		a.logInfo("scan_summary", scanSummaryMessage(len(changedLibraryIDs), notifySuccessCount, notifyFailedCount),
 			logging.F("cycle_id", cycleID),
-			logging.F("end_time", endedAt.Format(time.RFC3339)),
+			logging.F("monitor_count", len(a.Config.Monitors)),
 			logging.F("elapsed_seconds", endedAt.Sub(startedAt).Seconds()),
 			logging.F("scanned_monitor_count", scannedMonitorCount),
 			logging.F("failed_monitor_count", failedMonitorCount),
 			logging.F("changed_library_count", len(changedLibraryIDs)),
+			logging.F("added_count", addedCount),
+			logging.F("modified_count", modifiedCount),
+			logging.F("deleted_count", deletedCount),
+			logging.F("notify_success_count", notifySuccessCount),
+			logging.F("notify_failed_count", notifyFailedCount),
 		)
 	}
 
 	for _, libraryID := range changedLibraryIDs {
 		notifyStartedAt := time.Now()
 		requestPath := emby.RefreshPath(libraryID)
-		a.logInfo("notify_start", "开始通知 Emby 扫描媒体库",
-			logging.F("cycle_id", cycleID),
-			logging.F("library_id", libraryID),
-			logging.F("request_path", requestPath),
-		)
 		if err := a.Notifier.RefreshLibrary(ctx, libraryID); err != nil {
+			notifyFailedCount++
 			a.logError("notify_failed", "通知 Emby 扫描媒体库失败",
 				logging.F("cycle_id", cycleID),
 				logging.F("library_id", libraryID),
@@ -143,13 +144,7 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 			)
 			continue
 		}
-		a.logInfo("notify_success", "通知 Emby 扫描媒体库成功",
-			logging.F("cycle_id", cycleID),
-			logging.F("library_id", libraryID),
-			logging.F("request_path", requestPath),
-			logging.F("elapsed_seconds", time.Since(notifyStartedAt).Seconds()),
-			logging.F("status", "success"),
-		)
+		notifySuccessCount++
 	}
 
 	if err := a.Store.Save(next); err != nil {
@@ -159,18 +154,34 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 			logging.F("success", false),
 			logging.F("error", err),
 		)
-		logScanFinish()
+		logScanSummary()
 		return nil
 	}
-	a.logInfo("state_save", "扫描状态保存成功",
-		logging.F("cycle_id", cycleID),
-		logging.F("state_file", a.stateFilePath()),
-		logging.F("success", true),
-	)
 
-	logScanFinish()
+	logScanSummary()
 
 	return nil
+}
+
+func changeCounts(changes []snapshot.Change) (added, modified, deleted int) {
+	for _, change := range changes {
+		switch change.Type {
+		case snapshot.ChangeAdded:
+			added++
+		case snapshot.ChangeModified:
+			modified++
+		case snapshot.ChangeDeleted:
+			deleted++
+		}
+	}
+	return added, modified, deleted
+}
+
+func scanSummaryMessage(changedLibraryCount, notifySuccessCount, notifyFailedCount int) string {
+	if changedLibraryCount == 0 {
+		return "扫描完成，无文件变化"
+	}
+	return fmt.Sprintf("扫描完成，通知成功 %d/%d", notifySuccessCount, notifySuccessCount+notifyFailedCount)
 }
 
 func (a *App) Run(ctx context.Context) error {

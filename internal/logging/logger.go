@@ -130,14 +130,13 @@ func (l *Logger) rotateDailyFile(now time.Time) {
 
 func formatLine(now time.Time, level, event, msg string, fields ...Field) string {
 	var builder strings.Builder
-	builder.WriteString("time=")
-	builder.WriteString(now.Format(time.RFC3339))
-	builder.WriteString(" level=")
+	builder.WriteString(now.Format("2006-01-02 15:04:05"))
+	builder.WriteString(" [")
 	builder.WriteString(level)
+	builder.WriteString("] ")
+	builder.WriteString(msg)
 	builder.WriteString(" event=")
 	builder.WriteString(event)
-	builder.WriteString(" msg=")
-	builder.WriteString(fmt.Sprintf("%q", msg))
 
 	for _, field := range fields {
 		builder.WriteByte(' ')

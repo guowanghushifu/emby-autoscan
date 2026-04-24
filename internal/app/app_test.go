@@ -111,17 +111,13 @@ func TestRunOnceNotificationFailureStillSavesStateAndReturnsNil(t *testing.T) {
 
 	output := logs.String()
 	wantParts := []string{
-		"event=notify_start",
 		"library_id=library-movies",
-		"request_path=/emby/Items/library-movies/Refresh",
 		"event=notify_failed",
 		"elapsed_seconds=",
 		"error=\"emby unavailable\"",
 		"library_id=library-shows",
-		"event=notify_success",
-		"status=success",
-		"event=state_save",
-		"success=true",
+		"event=scan_summary",
+		"通知成功 1/2",
 	}
 	for _, part := range wantParts {
 		if !strings.Contains(output, part) {
@@ -149,12 +145,12 @@ func TestRunOnceStateSaveFailureLogsAndReturnsNil(t *testing.T) {
 	output := logs.String()
 	wantParts := []string{
 		"event=state_save",
-		"msg=\"扫描状态保存失败\"",
+		"扫描状态保存失败",
 		"cycle_id=cycle-save-fail",
 		"state_file=/tmp/state.json",
 		"success=false",
 		"error=\"disk full\"",
-		"event=scan_finish",
+		"event=scan_summary",
 		"changed_library_count=0",
 	}
 	for _, part := range wantParts {
@@ -249,7 +245,7 @@ func TestRunOnceSkipsScanWhenRcloneMountIsNotRunning(t *testing.T) {
 	output := logs.String()
 	wantParts := []string{
 		"event=rclone_mount_missing",
-		"msg=\"未检测到 rclone mount 进程，跳过本轮扫描\"",
+		"未检测到 rclone mount 进程，跳过本轮扫描",
 		"cycle_id=cycle-rclone-down",
 	}
 	for _, part := range wantParts {
@@ -353,7 +349,7 @@ func TestRunRejectsNonPositiveIntervalWithoutPanic(t *testing.T) {
 	}
 }
 
-func TestRunOnceLogsChineseScanChangeAndNotifyMessages(t *testing.T) {
+func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 	var logs bytes.Buffer
 	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
 		"Movie1": monitorSnapshot("Movie1", "library-movies",
@@ -377,40 +373,51 @@ func TestRunOnceLogsChineseScanChangeAndNotifyMessages(t *testing.T) {
 
 	output := logs.String()
 	wantParts := []string{
-		"event=scan_start",
-		"msg=\"开始执行目录检测\"",
 		"cycle_id=cycle-4",
-		"start_time=",
 		"monitor_count=1",
 		"event=file_change",
-		"msg=\"检测到文件新增\"",
-		"msg=\"检测到文件修改\"",
-		"msg=\"检测到文件删除\"",
+		"检测到文件新增",
 		"monitor=Movie1",
 		"path=/media/added.mkv",
 		"library_id=library-movies",
 		"change_type=added",
 		"size=30",
 		"mod_time=30",
-		"msg=\"开始通知 Emby 扫描媒体库\"",
-		"request_path=/emby/Items/library-movies/Refresh",
-		"msg=\"通知 Emby 扫描媒体库成功\"",
-		"status=success",
-		"event=state_save",
-		"msg=\"扫描状态保存成功\"",
-		"success=true",
-		"event=scan_finish",
-		"msg=\"目录检测完成\"",
-		"end_time=",
+		"event=scan_summary",
+		"扫描完成",
 		"elapsed_seconds=",
 		"scanned_monitor_count=1",
 		"failed_monitor_count=0",
 		"changed_library_count=1",
+		"added_count=1",
+		"modified_count=1",
+		"deleted_count=1",
+		"notify_success_count=1",
+		"notify_failed_count=0",
 	}
 	for _, part := range wantParts {
 		if !strings.Contains(output, part) {
 			t.Fatalf("logs missing %q in:\n%s", part, output)
 		}
+	}
+	for _, unwanted := range []string{
+		"event=scan_start",
+		"检测到文件修改",
+		"检测到文件删除",
+		"event=notify_start",
+		"event=notify_success",
+		"event=state_save success=true",
+		"event=scan_finish",
+	} {
+		if strings.Contains(output, unwanted) {
+			t.Fatalf("logs contain unwanted %q in:\n%s", unwanted, output)
+		}
+	}
+	if got := strings.Count(output, "event=file_change"); got != 1 {
+		t.Fatalf("file change log count = %d, want only added file logs in:\n%s", got, output)
+	}
+	if got := strings.Count(output, "event=scan_summary"); got != 1 {
+		t.Fatalf("scan summary log count = %d, want 1 in:\n%s", got, output)
 	}
 }
 

@@ -30,10 +30,9 @@ func TestLoggerWritesChineseMessageToStdoutAndDailyFile(t *testing.T) {
 	logger.Info("scan_start", "开始执行目录检测")
 
 	wantParts := []string{
-		"time=2026-04-24T12:00:00+08:00",
-		"level=INFO",
+		"2026-04-24 12:00:00 [INFO]",
 		"event=scan_start",
-		"msg=\"开始执行目录检测\"",
+		"开始执行目录检测",
 	}
 	assertLineContains(t, stdout.String(), wantParts)
 
@@ -109,10 +108,9 @@ func TestLoggerFallsBackToStdoutWhenFileSetupFails(t *testing.T) {
 	logger.Error("file_setup_failed", "开始执行目录检测", F("attempt", 1))
 
 	assertLineContains(t, stdout.String(), []string{
-		"time=2026-04-24T12:00:00+08:00",
-		"level=ERROR",
+		"2026-04-24 12:00:00 [ERROR]",
 		"event=file_setup_failed",
-		"msg=\"开始执行目录检测\"",
+		"开始执行目录检测",
 		"attempt=1",
 	})
 }
@@ -134,13 +132,13 @@ func TestLoggerRotatesAcrossMidnight(t *testing.T) {
 	logger.Info("after_midnight", "after")
 
 	firstDay := readLogFile(t, dir, "2026-04-24.log")
-	assertLineContains(t, firstDay, []string{"event=before_midnight", "msg=\"before\""})
+	assertLineContains(t, firstDay, []string{"event=before_midnight", "before"})
 	if strings.Contains(firstDay, "event=after_midnight") {
 		t.Fatalf("first day log contains rotated event: %q", firstDay)
 	}
 
 	secondDay := readLogFile(t, dir, "2026-04-25.log")
-	assertLineContains(t, secondDay, []string{"event=after_midnight", "msg=\"after\""})
+	assertLineContains(t, secondDay, []string{"event=after_midnight", "after"})
 	if strings.Contains(secondDay, "event=before_midnight") {
 		t.Fatalf("second day log contains previous event: %q", secondDay)
 	}
@@ -174,7 +172,7 @@ func TestLoggerClosesFileWhenRetentionCleanupFails(t *testing.T) {
 
 	logger.Info("after_cleanup_error", "stdout only")
 
-	assertLineContains(t, stdout.String(), []string{"event=after_cleanup_error", "msg=\"stdout only\""})
+	assertLineContains(t, stdout.String(), []string{"event=after_cleanup_error", "stdout only"})
 	data, err := os.ReadFile(todayPath)
 	if err != nil {
 		t.Fatalf("ReadFile(today) error = %v", err)
@@ -249,7 +247,7 @@ func assertLineContains(t *testing.T, line string, wantParts []string) {
 			t.Fatalf("log line %q missing %q", line, part)
 		}
 	}
-	if !regexp.MustCompile(`^time=\S+ level=\S+ event=\S+ msg=".*"`).MatchString(line) {
+	if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \[(INFO|ERROR)\] .+ event=\S+`).MatchString(line) {
 		t.Fatalf("log line %q does not have expected prefix format", line)
 	}
 }
