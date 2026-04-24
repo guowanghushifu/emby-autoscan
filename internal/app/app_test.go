@@ -112,6 +112,78 @@ func TestRunOnceSkipsStateUpdateForFailedMonitor(t *testing.T) {
 	}
 }
 
+func TestRunOnceDropsRemovedConfiguredMonitorFromSavedState(t *testing.T) {
+	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
+		"Movie1":  monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1-old.mkv", 10, 10)),
+		"Removed": monitorSnapshot("Removed", "library-removed", fileInfo("/media/removed.mkv", 20, 20)),
+	}}
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1-new.mkv", 30, 30)),
+	}}
+	store := &fakeStore{state: previous, exists: true}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{}, scanner, store, notifier, nil)
+
+	if err := app.RunOnce(context.Background(), "cycle-removed"); err != nil {
+		t.Fatalf("RunOnce() error = %v", err)
+	}
+
+	assertSavedMonitors(t, store, []string{"Movie1"})
+	if _, ok := store.saved.Monitors["Removed"]; ok {
+		t.Fatalf("saved state preserved removed monitor: %#v", store.saved.Monitors)
+	}
+}
+
+func TestRunWithAlreadyCanceledContextDoesNotScanAndReturnsCanceled(t *testing.T) {
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+	}}
+	store := &fakeStore{}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{Interval: time.Minute}, scanner, store, notifier, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := app.Run(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want context.Canceled", err)
+	}
+	if len(scanner.monitors) != 0 {
+		t.Fatalf("scanned monitors = %#v, want none", scanner.monitors)
+	}
+	if store.saveCount != 0 {
+		t.Fatalf("Save() count = %d, want 0", store.saveCount)
+	}
+	if len(notifier.libraryIDs) != 0 {
+		t.Fatalf("notified library IDs = %#v, want none", notifier.libraryIDs)
+	}
+}
+
+func TestRunRejectsNonPositiveIntervalWithoutPanic(t *testing.T) {
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+	}}
+	store := &fakeStore{}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{Interval: 0}, scanner, store, notifier, nil)
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			t.Fatalf("Run() panicked with non-positive interval: %v", recovered)
+		}
+	}()
+	err := app.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "scan interval must be positive") {
+		t.Fatalf("Run() error = %v, want positive interval error", err)
+	}
+	if len(scanner.monitors) != 0 {
+		t.Fatalf("scanned monitors = %#v, want none", scanner.monitors)
+	}
+	if store.saveCount != 0 {
+		t.Fatalf("Save() count = %d, want 0", store.saveCount)
+	}
+}
+
 func TestRunOnceLogsChineseScanChangeAndNotifyMessages(t *testing.T) {
 	var logs bytes.Buffer
 	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{

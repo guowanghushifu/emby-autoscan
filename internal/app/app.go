@@ -46,7 +46,7 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 
 	next := snapshot.State{
 		Version:  1,
-		Monitors: cloneMonitors(previous.Monitors),
+		Monitors: make(map[string]snapshot.MonitorSnapshot, len(a.Config.Monitors)),
 	}
 
 	allChanges := make([]snapshot.Change, 0)
@@ -57,6 +57,9 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 		current, err := a.Scanner.Scan(monitor)
 		if err != nil {
 			failedMonitorCount++
+			if previousMonitor, ok := previous.Monitors[monitor.Name]; ok {
+				next.Monitors[monitor.Name] = previousMonitor
+			}
 			a.logError("scan_monitor_failed", "目录检测失败",
 				logging.F("cycle_id", cycleID),
 				logging.F("monitor", monitor.Name),
@@ -112,6 +115,13 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 }
 
 func (a *App) Run(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if a.Config.Scan.Interval <= 0 {
+		return fmt.Errorf("scan interval must be positive")
+	}
+
 	if err := a.RunOnce(ctx, newCycleID()); err != nil {
 		return err
 	}
@@ -173,14 +183,6 @@ func logFileChange(a *App, cycleID string, change snapshot.Change) {
 		logging.F("size", change.Size),
 		logging.F("mod_time", change.ModTime),
 	)
-}
-
-func cloneMonitors(monitors map[string]snapshot.MonitorSnapshot) map[string]snapshot.MonitorSnapshot {
-	cloned := make(map[string]snapshot.MonitorSnapshot, len(monitors))
-	for name, monitor := range monitors {
-		cloned[name] = monitor
-	}
-	return cloned
 }
 
 func newCycleID() string {
