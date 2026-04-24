@@ -1,0 +1,14 @@
+[Unit]
+Description=Fuse mount Emby notify daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/fuse-mount-emby-notify -config /etc/fuse-mount-emby-notify/config.yaml
+Restart=on-failure
+WorkingDirectory=/var/lib/fuse-mount-emby-notify
+StateDirectory=fuse-mount-emby-notify
+
+[Install]
+WantedBy=multi-user.target

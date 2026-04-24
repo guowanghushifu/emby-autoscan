@@ -1,0 +1,23 @@
+emby:
+  url: "http://127.0.0.1:8096"
+  api_key: "replace-with-your-emby-api-key"
+
+scan:
+  interval: "5m"
+  state_file: "/var/lib/fuse-mount-emby-notify/state.json"
+  notify_on_first_scan: false
+
+logging:
+  dir: "logs"
+  retention_days: 7
+
+monitors:
+  - name: "movie1"
+    path: "/mnt/gd/sync/Movie1"
+    library_id: "movie-library-id"
+  - name: "movie2"
+    path: "/mnt/gd/sync/Movie2"
+    library_id: "movie-library-id"
+  - name: "tv"
+    path: "/mnt/gd/sync/TV"
+    library_id: "tv-library-id"
