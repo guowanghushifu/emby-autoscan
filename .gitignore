@@ -1,0 +1,4 @@
+.worktrees/
+dist/
+logs/
+state.json
