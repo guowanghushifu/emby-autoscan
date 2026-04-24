@@ -70,23 +70,33 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dis
 These commands install the binary, configuration, and systemd unit on Debian 12:
 
 ```sh
+sudo useradd --system --home-dir /var/lib/fuse-mount-emby-notify --shell /usr/sbin/nologin fuse-mount-emby-notify
+
 sudo install -d -m 0755 /usr/local/bin
 sudo install -m 0755 dist/fuse-mount-emby-notify /usr/local/bin/fuse-mount-emby-notify
 
 sudo install -d -m 0755 /etc/fuse-mount-emby-notify
-sudo install -m 0640 config.example.yaml /etc/fuse-mount-emby-notify/config.yaml
+sudo install -o root -g fuse-mount-emby-notify -m 0640 config.example.yaml /etc/fuse-mount-emby-notify/config.yaml
 sudo editor /etc/fuse-mount-emby-notify/config.yaml
+sudo chown root:fuse-mount-emby-notify /etc/fuse-mount-emby-notify/config.yaml
+sudo chmod 0640 /etc/fuse-mount-emby-notify/config.yaml
 
 sudo install -m 0644 deploy/fuse-mount-emby-notify.service /etc/systemd/system/fuse-mount-emby-notify.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now fuse-mount-emby-notify.service
 ```
 
-The unit uses `StateDirectory=fuse-mount-emby-notify`, so systemd creates `/var/lib/fuse-mount-emby-notify` for the state file and relative `logs` directory. It runs with `WorkingDirectory=/var/lib/fuse-mount-emby-notify` and starts:
+The service runs as the dedicated `fuse-mount-emby-notify` user and group. The config file is owned by `root:fuse-mount-emby-notify` with mode `0640` so the service can read the Emby API key while other local users cannot.
+
+The unit uses `StateDirectory=fuse-mount-emby-notify`, so systemd creates `/var/lib/fuse-mount-emby-notify` for writable service state. It runs with `WorkingDirectory=/var/lib/fuse-mount-emby-notify`; when `logging.dir: "logs"`, the app creates the `logs` directory inside that working directory. The service starts:
 
 ```sh
 /usr/local/bin/fuse-mount-emby-notify -config /etc/fuse-mount-emby-notify/config.yaml
 ```
+
+The generic unit only waits for `network-online.target`; it does not wait for your actual media mount units. If the service starts before the FUSE/rclone mounts are ready, scans may fail, or an empty first baseline may make later existing files look like new changes. Add `Requires=` and `After=` entries for your mount unit, or start this service only after your rclone mount process is ready.
+
+The service user must also be able to traverse every configured `monitors[].path`. For user-mounted rclone/FUSE paths, either run this service as the same user that owns the mount, or configure FUSE/rclone access appropriately, such as `allow_other` with the required `/etc/fuse.conf` setting.
 
 Useful operational commands:
 

@@ -5,6 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+User=fuse-mount-emby-notify
+Group=fuse-mount-emby-notify
 ExecStart=/usr/local/bin/fuse-mount-emby-notify -config /etc/fuse-mount-emby-notify/config.yaml
 Restart=on-failure
 WorkingDirectory=/var/lib/fuse-mount-emby-notify
