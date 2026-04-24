@@ -62,6 +62,18 @@ Human-readable log messages are written in Chinese for operators, while event na
 Build a static Linux amd64 binary from the repository root:
 
 ```sh
+./build.sh
+```
+
+The script writes `dist/fuse-mount-emby-notify-linux-amd64` by default. You can override target and output values:
+
+```sh
+GOOS=linux GOARCH=arm64 OUTPUT=dist/fuse-mount-emby-notify-arm64 ./build.sh
+```
+
+Equivalent manual command:
+
+```sh
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/fuse-mount-emby-notify ./cmd/fuse-mount-emby-notify
 ```
 
@@ -73,7 +85,7 @@ These commands install the binary, configuration, and systemd unit on Debian 12:
 sudo useradd --system --home-dir /var/lib/fuse-mount-emby-notify --shell /usr/sbin/nologin fuse-mount-emby-notify
 
 sudo install -d -m 0755 /usr/local/bin
-sudo install -m 0755 dist/fuse-mount-emby-notify /usr/local/bin/fuse-mount-emby-notify
+sudo install -m 0755 dist/fuse-mount-emby-notify-linux-amd64 /usr/local/bin/fuse-mount-emby-notify
 
 sudo install -d -m 0755 /etc/fuse-mount-emby-notify
 sudo install -o root -g fuse-mount-emby-notify -m 0640 config.example.yaml /etc/fuse-mount-emby-notify/config.yaml
