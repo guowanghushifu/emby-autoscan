@@ -10,12 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/app"
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/config"
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/emby"
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/logging"
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/snapshot"
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/state"
+	"github.com/guowanghushifu/emby-autoscan/internal/app"
+	"github.com/guowanghushifu/emby-autoscan/internal/config"
+	"github.com/guowanghushifu/emby-autoscan/internal/emby"
+	"github.com/guowanghushifu/emby-autoscan/internal/logging"
+	"github.com/guowanghushifu/emby-autoscan/internal/snapshot"
+	"github.com/guowanghushifu/emby-autoscan/internal/state"
 )
 
 type FileScanner struct{}
@@ -29,7 +29,7 @@ func main() {
 }
 
 func run(args []string) int {
-	flags := flag.NewFlagSet("fuse-mount-emby-notify", flag.ContinueOnError)
+	flags := flag.NewFlagSet("emby-autoscan", flag.ContinueOnError)
 	flags.SetOutput(os.Stderr)
 	configPath := flags.String("config", "", "配置文件路径")
 	if err := flags.Parse(args); err != nil {

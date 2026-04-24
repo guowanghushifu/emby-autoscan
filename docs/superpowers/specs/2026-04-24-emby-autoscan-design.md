@@ -1,4 +1,4 @@
-# FUSE Mount Emby Notify Design
+# Emby Autoscan Design
 
 ## Goal
 
@@ -40,7 +40,7 @@ emby:
 
 scan:
   interval: "5m"
-  state_file: "/var/lib/fuse-mount-emby-notify/state.json"
+  state_file: "/var/lib/emby-autoscan/state.json"
   notify_on_first_scan: false
 
 logging:
@@ -134,7 +134,7 @@ HTTP 2xx responses are treated as success. Non-2xx responses and network errors 
 The binary accepts a config path:
 
 ```bash
-fuse-mount-emby-notify -config /etc/fuse-mount-emby-notify/config.yaml
+emby-autoscan -config /etc/emby-autoscan/config.yaml
 ```
 
 It logs to stdout/stderr for systemd compatibility. It handles `SIGINT` and `SIGTERM` by stopping after the current scan cycle, saving any completed scan state before exit.
@@ -147,14 +147,14 @@ The repository should include:
 
 - `README.md` with build, configuration, and service setup instructions.
 - `config.example.yaml` with movie and TV examples.
-- `deploy/fuse-mount-emby-notify.service` as a systemd unit example.
+- `deploy/emby-autoscan.service` as a systemd unit example.
 - Go tests for configuration validation, snapshot comparison, state persistence, and Emby client request generation.
 - Go tests for log file creation, stdout/file dual writing, daily filename selection, and seven-day retention cleanup.
 
 The build target should support static Linux binaries:
 
 ```bash
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/fuse-mount-emby-notify ./cmd/fuse-mount-emby-notify
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/emby-autoscan ./cmd/emby-autoscan
 ```
 
 ## Error Handling

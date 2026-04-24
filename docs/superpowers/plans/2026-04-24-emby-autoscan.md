@@ -1,4 +1,4 @@
-# FUSE Mount Emby Notify Implementation Plan
+# Emby Autoscan Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -13,7 +13,7 @@
 ## File Structure
 
 - Create `go.mod`: module definition and YAML dependency.
-- Create `cmd/fuse-mount-emby-notify/main.go`: CLI flags, startup wiring, signal handling, daemon loop.
+- Create `cmd/emby-autoscan/main.go`: CLI flags, startup wiring, signal handling, daemon loop.
 - Create `internal/config/config.go`: YAML structures, defaults, validation.
 - Create `internal/config/config_test.go`: config loading and validation tests.
 - Create `internal/logging/logger.go`: Chinese structured logger, stdout/file dual writer, daily rotation, seven-day retention.
@@ -28,7 +28,7 @@
 - Create `internal/app/app_test.go`: first-scan behavior, per-library dedupe, failed-monitor behavior.
 - Create `config.example.yaml`: sample config with two movie paths sharing one library.
 - Create `README.md`: build, config, Debian 12/systemd usage.
-- Create `deploy/fuse-mount-emby-notify.service`: example systemd unit.
+- Create `deploy/emby-autoscan.service`: example systemd unit.
 
 ## Shared Data Contracts
 
@@ -108,7 +108,7 @@ Expected: FAIL because `go.mod` or `internal/config` does not exist.
 Create `go.mod`:
 
 ```go
-module github.com/wangdazhuo/fuse-mount-emby-notify
+module github.com/guowanghushifu/emby-autoscan
 
 go 1.22
 
@@ -400,12 +400,12 @@ git commit -m "feat: add scan cycle orchestration"
 ### Task 7: CLI Wiring And Daemon Runtime
 
 **Files:**
-- Create: `cmd/fuse-mount-emby-notify/main.go`
+- Create: `cmd/emby-autoscan/main.go`
 - Modify: `internal/snapshot/snapshot.go`
 
 - [ ] **Step 1: Write failing CLI build check**
 
-Run: `go test ./cmd/fuse-mount-emby-notify -run TestDoesNotExist -v`
+Run: `go test ./cmd/emby-autoscan -run TestDoesNotExist -v`
 
 Expected: FAIL because the command package does not exist.
 
@@ -428,16 +428,16 @@ Run: `go test ./...`
 
 Expected: PASS.
 
-Run: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/fuse-mount-emby-notify ./cmd/fuse-mount-emby-notify`
+Run: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/emby-autoscan ./cmd/emby-autoscan`
 
-Expected: PASS and creates `dist/fuse-mount-emby-notify`.
+Expected: PASS and creates `dist/emby-autoscan`.
 
 - [ ] **Step 4: Commit CLI runtime**
 
 Run:
 
 ```bash
-git add cmd/fuse-mount-emby-notify/main.go internal/snapshot/snapshot.go
+git add cmd/emby-autoscan/main.go internal/snapshot/snapshot.go
 git commit -m "feat: wire daemon runtime"
 ```
 
@@ -446,15 +446,15 @@ git commit -m "feat: wire daemon runtime"
 **Files:**
 - Create: `config.example.yaml`
 - Create: `README.md`
-- Create: `deploy/fuse-mount-emby-notify.service`
+- Create: `deploy/emby-autoscan.service`
 
 - [ ] **Step 1: Create example config**
 
-Create `config.example.yaml` with Emby URL/API key, `scan.interval: "5m"`, `scan.state_file: "/var/lib/fuse-mount-emby-notify/state.json"`, `logging.dir: "logs"`, `logging.retention_days: 7`, and monitors for `/mnt/gd/sync/Movie1`, `/mnt/gd/sync/Movie2`, and `/mnt/gd/sync/TV` where the two movie paths share one `library_id`.
+Create `config.example.yaml` with Emby URL/API key, `scan.interval: "5m"`, `scan.state_file: "/var/lib/emby-autoscan/state.json"`, `logging.dir: "logs"`, `logging.retention_days: 7`, and monitors for `/mnt/gd/sync/Movie1`, `/mnt/gd/sync/Movie2`, and `/mnt/gd/sync/TV` where the two movie paths share one `library_id`.
 
 - [ ] **Step 2: Create systemd unit**
 
-Create `deploy/fuse-mount-emby-notify.service` with `ExecStart=/usr/local/bin/fuse-mount-emby-notify -config /etc/fuse-mount-emby-notify/config.yaml`, `Restart=on-failure`, `WorkingDirectory=/var/lib/fuse-mount-emby-notify`, and `StateDirectory=fuse-mount-emby-notify`.
+Create `deploy/emby-autoscan.service` with `ExecStart=/usr/local/bin/emby-autoscan -config /etc/emby-autoscan/config.yaml`, `Restart=on-failure`, `WorkingDirectory=/var/lib/emby-autoscan`, and `StateDirectory=emby-autoscan`.
 
 - [ ] **Step 3: Create README**
 
@@ -466,7 +466,7 @@ Run: `go test ./...`
 
 Expected: PASS.
 
-Run: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/fuse-mount-emby-notify ./cmd/fuse-mount-emby-notify`
+Run: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/emby-autoscan ./cmd/emby-autoscan`
 
 Expected: PASS.
 
@@ -475,7 +475,7 @@ Expected: PASS.
 Run:
 
 ```bash
-git add README.md config.example.yaml deploy/fuse-mount-emby-notify.service
+git add README.md config.example.yaml deploy/emby-autoscan.service
 git commit -m "docs: add deployment guide"
 ```
 
@@ -492,7 +492,7 @@ Expected: PASS.
 
 - [ ] **Step 2: Run static Linux build**
 
-Run: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/fuse-mount-emby-notify ./cmd/fuse-mount-emby-notify`
+Run: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/emby-autoscan ./cmd/emby-autoscan`
 
 Expected: PASS.
 

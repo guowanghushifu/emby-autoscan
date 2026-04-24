@@ -1,6 +1,6 @@
-# fuse-mount-emby-notify
+# emby-autoscan
 
-`fuse-mount-emby-notify` is a small Go daemon for Debian servers that watches configured media directories and asks Emby to refresh only the libraries whose files changed. It is intended for media paths mounted with `rclone mount` or other FUSE filesystems where normal filesystem event watchers can miss, delay, or duplicate change notifications.
+`emby-autoscan` is a small Go daemon for Debian servers that watches configured media directories and asks Emby to refresh only the libraries whose files changed. It is intended for media paths mounted with `rclone mount` or other FUSE filesystems where normal filesystem event watchers can miss, delay, or duplicate change notifications.
 
 ## Why Polling
 
@@ -8,7 +8,7 @@ FUSE and `rclone mount` layers do not always provide reliable inotify-style even
 
 ## Configuration
 
-Copy `config.example.yaml` to `/etc/fuse-mount-emby-notify/config.yaml` and edit it for your server:
+Copy `config.example.yaml` to `/etc/emby-autoscan/config.yaml` and edit it for your server:
 
 ```yaml
 emby:
@@ -17,7 +17,7 @@ emby:
 
 scan:
   interval: "5m"
-  state_file: "/var/lib/fuse-mount-emby-notify/state.json"
+  state_file: "/var/lib/emby-autoscan/state.json"
   notify_on_first_scan: false
 
 logging:
@@ -65,16 +65,16 @@ Build a static Linux amd64 binary from the repository root:
 ./build.sh
 ```
 
-The script writes `dist/fuse-mount-emby-notify-linux-amd64` by default. You can override target and output values:
+The script writes `dist/emby-autoscan-linux-amd64` by default. You can override target and output values:
 
 ```sh
-GOOS=linux GOARCH=arm64 OUTPUT=dist/fuse-mount-emby-notify-arm64 ./build.sh
+GOOS=linux GOARCH=arm64 OUTPUT=dist/emby-autoscan-arm64 ./build.sh
 ```
 
 Equivalent manual command:
 
 ```sh
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/fuse-mount-emby-notify ./cmd/fuse-mount-emby-notify
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dist/emby-autoscan ./cmd/emby-autoscan
 ```
 
 ## Debian 12 Install
@@ -82,28 +82,28 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o dis
 These commands install the binary, configuration, and systemd unit on Debian 12:
 
 ```sh
-sudo useradd --system --home-dir /var/lib/fuse-mount-emby-notify --shell /usr/sbin/nologin fuse-mount-emby-notify
+sudo useradd --system --home-dir /var/lib/emby-autoscan --shell /usr/sbin/nologin emby-autoscan
 
 sudo install -d -m 0755 /usr/local/bin
-sudo install -m 0755 dist/fuse-mount-emby-notify-linux-amd64 /usr/local/bin/fuse-mount-emby-notify
+sudo install -m 0755 dist/emby-autoscan-linux-amd64 /usr/local/bin/emby-autoscan
 
-sudo install -d -m 0755 /etc/fuse-mount-emby-notify
-sudo install -o root -g fuse-mount-emby-notify -m 0640 config.example.yaml /etc/fuse-mount-emby-notify/config.yaml
-sudo editor /etc/fuse-mount-emby-notify/config.yaml
-sudo chown root:fuse-mount-emby-notify /etc/fuse-mount-emby-notify/config.yaml
-sudo chmod 0640 /etc/fuse-mount-emby-notify/config.yaml
+sudo install -d -m 0755 /etc/emby-autoscan
+sudo install -o root -g emby-autoscan -m 0640 config.example.yaml /etc/emby-autoscan/config.yaml
+sudo editor /etc/emby-autoscan/config.yaml
+sudo chown root:emby-autoscan /etc/emby-autoscan/config.yaml
+sudo chmod 0640 /etc/emby-autoscan/config.yaml
 
-sudo install -m 0644 deploy/fuse-mount-emby-notify.service /etc/systemd/system/fuse-mount-emby-notify.service
+sudo install -m 0644 deploy/emby-autoscan.service /etc/systemd/system/emby-autoscan.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now fuse-mount-emby-notify.service
+sudo systemctl enable --now emby-autoscan.service
 ```
 
-The service runs as the dedicated `fuse-mount-emby-notify` user and group. The config file is owned by `root:fuse-mount-emby-notify` with mode `0640` so the service can read the Emby API key while other local users cannot.
+The service runs as the dedicated `emby-autoscan` user and group. The config file is owned by `root:emby-autoscan` with mode `0640` so the service can read the Emby API key while other local users cannot.
 
-The unit uses `StateDirectory=fuse-mount-emby-notify`, so systemd creates `/var/lib/fuse-mount-emby-notify` for writable service state. It runs with `WorkingDirectory=/var/lib/fuse-mount-emby-notify`; when `logging.dir: "logs"`, the app creates the `logs` directory inside that working directory. The service starts:
+The unit uses `StateDirectory=emby-autoscan`, so systemd creates `/var/lib/emby-autoscan` for writable service state. It runs with `WorkingDirectory=/var/lib/emby-autoscan`; when `logging.dir: "logs"`, the app creates the `logs` directory inside that working directory. The service starts:
 
 ```sh
-/usr/local/bin/fuse-mount-emby-notify -config /etc/fuse-mount-emby-notify/config.yaml
+/usr/local/bin/emby-autoscan -config /etc/emby-autoscan/config.yaml
 ```
 
 The generic unit only waits for `network-online.target`; it does not wait for your actual media mount units. If the service starts before the FUSE/rclone mounts are ready, scans may fail, or an empty first baseline may make later existing files look like new changes. Add `Requires=` and `After=` entries for your mount unit, or start this service only after your rclone mount process is ready.
@@ -113,7 +113,7 @@ The service user must also be able to traverse every configured `monitors[].path
 Useful operational commands:
 
 ```sh
-sudo systemctl status fuse-mount-emby-notify.service
-sudo journalctl -u fuse-mount-emby-notify.service -f
-sudo systemctl restart fuse-mount-emby-notify.service
+sudo systemctl status emby-autoscan.service
+sudo journalctl -u emby-autoscan.service -f
+sudo systemctl restart emby-autoscan.service
 ```

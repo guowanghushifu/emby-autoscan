@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/snapshot"
+	"github.com/guowanghushifu/emby-autoscan/internal/snapshot"
 )
 
 func TestLoadMissingStateReturnsEmptyStateAndFalse(t *testing.T) {

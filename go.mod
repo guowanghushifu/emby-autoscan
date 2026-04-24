@@ -1,4 +1,4 @@
-module github.com/wangdazhuo/fuse-mount-emby-notify
+module github.com/guowanghushifu/emby-autoscan
 
 go 1.22
 

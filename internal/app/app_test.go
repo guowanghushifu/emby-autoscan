@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/config"
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/logging"
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/snapshot"
+	"github.com/guowanghushifu/emby-autoscan/internal/config"
+	"github.com/guowanghushifu/emby-autoscan/internal/logging"
+	"github.com/guowanghushifu/emby-autoscan/internal/snapshot"
 )
 
 func TestRunOnceFirstScanSavesBaselineWithoutNotify(t *testing.T) {

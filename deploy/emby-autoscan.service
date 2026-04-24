@@ -1,0 +1,16 @@
+[Unit]
+Description=Emby Autoscan daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=emby-autoscan
+Group=emby-autoscan
+ExecStart=/usr/local/bin/emby-autoscan -config /etc/emby-autoscan/config.yaml
+Restart=on-failure
+WorkingDirectory=/var/lib/emby-autoscan
+StateDirectory=emby-autoscan
+
+[Install]
+WantedBy=multi-user.target

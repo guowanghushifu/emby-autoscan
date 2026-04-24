@@ -4,7 +4,7 @@ emby:
 
 scan:
   interval: "5m"
-  state_file: "/var/lib/fuse-mount-emby-notify/state.json"
+  state_file: "/var/lib/emby-autoscan/state.json"
   notify_on_first_scan: false
 
 logging:

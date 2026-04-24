@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wangdazhuo/fuse-mount-emby-notify/internal/snapshot"
+	"github.com/guowanghushifu/emby-autoscan/internal/snapshot"
 )
 
 type Store struct {

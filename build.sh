@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-APP_NAME="fuse-mount-emby-notify"
-CMD_PATH="./cmd/fuse-mount-emby-notify"
+APP_NAME="emby-autoscan"
+CMD_PATH="./cmd/emby-autoscan"
 OUTPUT_DIR="${OUTPUT_DIR:-dist}"
 GOOS="${GOOS:-linux}"
 GOARCH="${GOARCH:-amd64}"
