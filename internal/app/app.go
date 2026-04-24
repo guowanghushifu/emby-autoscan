@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -102,7 +101,6 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 		)
 	}
 
-	notifyErrors := make([]error, 0)
 	for _, libraryID := range changedLibraryIDs {
 		notifyStartedAt := time.Now()
 		requestPath := emby.RefreshPath(libraryID)
@@ -119,7 +117,6 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 				logging.F("elapsed_seconds", time.Since(notifyStartedAt).Seconds()),
 				logging.F("error", err),
 			)
-			notifyErrors = append(notifyErrors, fmt.Errorf("notify library %s: %w", libraryID, err))
 			continue
 		}
 		a.logInfo("notify_success", "通知 Emby 扫描媒体库成功",
@@ -149,7 +146,7 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 
 	logScanFinish()
 
-	return errors.Join(notifyErrors...)
+	return nil
 }
 
 func (a *App) Run(ctx context.Context) error {

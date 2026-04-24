@@ -79,7 +79,7 @@ func TestRunOnceDeduplicatesSameLibraryAcrossMonitors(t *testing.T) {
 	}
 }
 
-func TestRunOnceNotificationFailureStillSavesStateAndContinues(t *testing.T) {
+func TestRunOnceNotificationFailureStillSavesStateAndReturnsNil(t *testing.T) {
 	var logs bytes.Buffer
 	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
 		"Movie1": monitorSnapshot("Movie1", "library-movies"),
@@ -93,8 +93,8 @@ func TestRunOnceNotificationFailureStillSavesStateAndContinues(t *testing.T) {
 	notifier := &fakeNotifier{errors: map[string]error{"library-movies": errors.New("emby unavailable")}}
 	app := newTestApp(t, config.ScanConfig{}, scanner, store, notifier, &logs)
 
-	if err := app.RunOnce(context.Background(), "cycle-notify-fail"); err == nil {
-		t.Fatalf("RunOnce() error = nil, want notification error")
+	if err := app.RunOnce(context.Background(), "cycle-notify-fail"); err != nil {
+		t.Fatalf("RunOnce() error = %v, want nil after logging notification failure", err)
 	}
 
 	if store.saveCount != 1 {
@@ -263,6 +263,28 @@ func TestRunLogsCycleErrorAndRetriesUntilCanceled(t *testing.T) {
 	}
 	if len(scanner.monitors) < 2 {
 		t.Fatalf("scanned monitors = %#v, want retry after first cycle error", scanner.monitors)
+	}
+}
+
+func TestRunRetriesStateLoadFailureUntilCanceled(t *testing.T) {
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+	}}
+	store := &fakeStore{loadErr: errors.New("state temporarily unavailable")}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{Interval: time.Millisecond}, scanner, store, notifier, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	err := app.Run(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Run() error = %v, want context deadline after retry window", err)
+	}
+	if store.loadCount < 2 {
+		t.Fatalf("Load() count = %d, want retries after load failure", store.loadCount)
+	}
+	if len(scanner.monitors) != 0 {
+		t.Fatalf("scanned monitors = %#v, want none while state load fails", scanner.monitors)
 	}
 }
 
@@ -481,10 +503,12 @@ type fakeStore struct {
 	loadErr   error
 	saveErr   error
 	saved     snapshot.State
+	loadCount int
 	saveCount int
 }
 
 func (f *fakeStore) Load() (snapshot.State, bool, error) {
+	f.loadCount++
 	return f.state, f.exists, f.loadErr
 }
 
