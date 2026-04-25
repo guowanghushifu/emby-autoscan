@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"time"
 
@@ -40,6 +41,10 @@ type App struct {
 	Notifier     Notifier
 	MountChecker MountChecker
 	Logger       *logging.Logger
+
+	stateLoaded bool
+	stateExists bool
+	stateCache  snapshot.State
 }
 
 func (a *App) RunOnce(ctx context.Context, cycleID string) error {
@@ -64,7 +69,7 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 		}
 	}
 
-	previous, exists, err := a.Store.Load()
+	previous, exists, err := a.loadState()
 	if err != nil {
 		return fmt.Errorf("load snapshot state: %w", err)
 	}
@@ -147,6 +152,13 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 		notifySuccessCount++
 	}
 
+	if !a.shouldSaveState(previous, next, exists) {
+		a.stateCache = next
+		a.stateExists = true
+		logScanSummary()
+		return nil
+	}
+
 	if err := a.Store.Save(next); err != nil {
 		a.logError("state_save", "扫描状态保存失败",
 			logging.F("cycle_id", cycleID),
@@ -157,10 +169,34 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 		logScanSummary()
 		return nil
 	}
+	a.stateCache = next
+	a.stateExists = true
 
 	logScanSummary()
 
 	return nil
+}
+
+func (a *App) loadState() (snapshot.State, bool, error) {
+	if a.stateLoaded {
+		return a.stateCache, a.stateExists, nil
+	}
+
+	state, exists, err := a.Store.Load()
+	if err != nil {
+		return snapshot.State{}, false, err
+	}
+	a.stateCache = state
+	a.stateExists = exists
+	a.stateLoaded = true
+	return state, exists, nil
+}
+
+func (a *App) shouldSaveState(previous, next snapshot.State, exists bool) bool {
+	if !exists {
+		return true
+	}
+	return !reflect.DeepEqual(previous, next)
 }
 
 func changeCounts(changes []snapshot.Change) (added, modified, deleted int) {

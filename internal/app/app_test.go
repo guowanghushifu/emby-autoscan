@@ -36,6 +36,32 @@ func TestRunOnceFirstScanSavesBaselineWithoutNotify(t *testing.T) {
 	}
 }
 
+func TestRunOnceCachesStateAndSkipsSaveWhenUnchanged(t *testing.T) {
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+	}}
+	store := &fakeStore{}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{NotifyOnFirstScan: false}, scanner, store, notifier, nil)
+
+	if err := app.RunOnce(context.Background(), "cycle-1"); err != nil {
+		t.Fatalf("first RunOnce() error = %v", err)
+	}
+	if err := app.RunOnce(context.Background(), "cycle-2"); err != nil {
+		t.Fatalf("second RunOnce() error = %v", err)
+	}
+
+	if store.loadCount != 1 {
+		t.Fatalf("Load() count = %d, want cached state after first load", store.loadCount)
+	}
+	if store.saveCount != 1 {
+		t.Fatalf("Save() count = %d, want only first baseline save", store.saveCount)
+	}
+	if len(notifier.libraryIDs) != 0 {
+		t.Fatalf("notified library IDs = %#v, want none for unchanged cached scan", notifier.libraryIDs)
+	}
+}
+
 func TestRunOnceNotifyOnFirstScanNotifiesChangedLibraries(t *testing.T) {
 	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
 		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
