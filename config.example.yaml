@@ -6,6 +6,15 @@ scan:
   interval: "5m"
   state_file: "/var/lib/emby-autoscan/state.json"
   notify_on_first_scan: false
+  notify_extensions:
+    - ".mp4"
+    - ".mkv"
+    - ".ts"
+    - ".m2ts"
+    - ".srt"
+    - ".ass"
+    - ".sup"
+    - ".pgs"
 
 logging:
   dir: "logs"

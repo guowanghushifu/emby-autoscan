@@ -19,6 +19,15 @@ scan:
   interval: "5m"
   state_file: "/var/lib/emby-autoscan/state.json"
   notify_on_first_scan: false
+  notify_extensions:
+    - ".mp4"
+    - ".mkv"
+    - ".ts"
+    - ".m2ts"
+    - ".srt"
+    - ".ass"
+    - ".sup"
+    - ".pgs"
 
 logging:
   dir: "logs"
@@ -43,6 +52,7 @@ Fields:
 - `scan.interval`: Polling interval using Go duration syntax, such as `30s`, `5m`, or `1h`.
 - `scan.state_file`: JSON state path used to remember the previous snapshot across restarts.
 - `scan.notify_on_first_scan`: When `false`, the first run records state without refreshing Emby; when `true`, existing files are treated as changed once.
+- `scan.notify_extensions`: File suffixes that should log file changes and refresh Emby. Matching is case-insensitive, and values may be written with or without the leading dot. Other suffixes still update the saved state, but do not produce file-change logs or Emby refresh requests.
 - `logging.dir`: Directory for daily log files. A relative value such as `logs` is resolved from the process working directory.
 - `logging.retention_days`: Number of daily log files to keep.
 - `monitors[].name`: Unique local name for a monitored path.

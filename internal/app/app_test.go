@@ -105,6 +105,86 @@ func TestRunOnceDeduplicatesSameLibraryAcrossMonitors(t *testing.T) {
 	}
 }
 
+func TestRunOnceIgnoresUnmatchedExtensionsForLogsAndNotifyButSavesState(t *testing.T) {
+	var logs bytes.Buffer
+	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies",
+			fileInfo("/media/movie1/movie.nfo", 100, 1000),
+			fileInfo("/media/movie1/old.jpg", 200, 2000),
+		),
+	}}
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies",
+			fileInfo("/media/movie1/movie.nfo", 101, 1001),
+			fileInfo("/media/movie1/poster.jpg", 300, 3000),
+		),
+	}}
+	store := &fakeStore{state: previous, exists: true}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{}, scanner, store, notifier, &logs)
+
+	if err := app.RunOnce(context.Background(), "cycle-ignored-extensions"); err != nil {
+		t.Fatalf("RunOnce() error = %v", err)
+	}
+
+	if len(notifier.libraryIDs) != 0 {
+		t.Fatalf("notified library IDs = %#v, want none for ignored extensions", notifier.libraryIDs)
+	}
+	assertSavedMonitors(t, store, []string{"Movie1"})
+	if got := store.saved.Monitors["Movie1"]; !reflect.DeepEqual(got, scanner.snapshots["Movie1"]) {
+		t.Fatalf("saved Movie1 snapshot = %#v, want full scanned snapshot %#v", got, scanner.snapshots["Movie1"])
+	}
+	output := logs.String()
+	if strings.Contains(output, "新增文件") || strings.Contains(output, "修改文件") || strings.Contains(output, "删除文件") {
+		t.Fatalf("logs contain ignored extension file change in:\n%s", output)
+	}
+	wantSummary := "扫描完成：1 个目录，0 个需通知变化，忽略 3 个其他变化，耗时 0.0s"
+	if !strings.Contains(output, wantSummary) {
+		t.Fatalf("logs missing %q in:\n%s", wantSummary, output)
+	}
+}
+
+func TestRunOnceFiltersNotifyByConfiguredExtensionsCaseInsensitively(t *testing.T) {
+	var logs bytes.Buffer
+	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies",
+			fileInfo("/media/movie1/old.nfo", 10, 10),
+		),
+	}}
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies",
+			fileInfo("/media/movie1/episode.MP4", 20, 20),
+			fileInfo("/media/movie1/poster.jpg", 30, 30),
+		),
+	}}
+	store := &fakeStore{state: previous, exists: true}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{NotifyExtensions: []string{".mp4"}}, scanner, store, notifier, &logs)
+
+	if err := app.RunOnce(context.Background(), "cycle-custom-extensions"); err != nil {
+		t.Fatalf("RunOnce() error = %v", err)
+	}
+
+	wantLibraries := []string{"library-movies"}
+	if !reflect.DeepEqual(notifier.libraryIDs, wantLibraries) {
+		t.Fatalf("notified library IDs = %#v, want %#v", notifier.libraryIDs, wantLibraries)
+	}
+	assertSavedMonitors(t, store, []string{"Movie1"})
+	output := logs.String()
+	wantParts := []string{
+		"新增文件：Movie1 / episode.MP4，0.0 GiB，媒体库ID library-movies",
+		"扫描完成：1 个目录，新增 1，修改 0，删除 0；已通知 1/1，忽略 2 个其他变化，耗时 0.0s",
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(output, part) {
+			t.Fatalf("logs missing %q in:\n%s", part, output)
+		}
+	}
+	if strings.Contains(output, "poster.jpg") || strings.Contains(output, "old.nfo") {
+		t.Fatalf("logs contain ignored extension paths in:\n%s", output)
+	}
+}
+
 func TestRunOnceNotificationFailureStillSavesStateAndReturnsNil(t *testing.T) {
 	var logs bytes.Buffer
 	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{

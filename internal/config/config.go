@@ -18,6 +18,8 @@ const (
 	defaultLoggingRetention = 7
 )
 
+var defaultScanNotifyExtensions = []string{".mp4", ".mkv", ".ts", ".m2ts", ".srt", ".ass", ".sup", ".pgs"}
+
 type Config struct {
 	Emby     EmbyConfig      `yaml:"emby"`
 	Scan     ScanConfig      `yaml:"scan"`
@@ -34,6 +36,7 @@ type ScanConfig struct {
 	Interval          time.Duration `yaml:"interval"`
 	StateFile         string        `yaml:"state_file"`
 	NotifyOnFirstScan bool          `yaml:"notify_on_first_scan"`
+	NotifyExtensions  []string      `yaml:"notify_extensions"`
 }
 
 type LoggingConfig struct {
@@ -55,9 +58,10 @@ type rawConfig struct {
 }
 
 type rawScanConfig struct {
-	Interval          string `yaml:"interval"`
-	StateFile         string `yaml:"state_file"`
-	NotifyOnFirstScan bool   `yaml:"notify_on_first_scan"`
+	Interval          string   `yaml:"interval"`
+	StateFile         string   `yaml:"state_file"`
+	NotifyOnFirstScan bool     `yaml:"notify_on_first_scan"`
+	NotifyExtensions  []string `yaml:"notify_extensions"`
 }
 
 type rawLoggingConfig struct {
@@ -96,6 +100,7 @@ func normalize(raw rawConfig) (Config, error) {
 			Interval:          defaultScanInterval,
 			StateFile:         defaultScanStateFile,
 			NotifyOnFirstScan: raw.Scan.NotifyOnFirstScan,
+			NotifyExtensions:  normalizeNotifyExtensions(raw.Scan.NotifyExtensions),
 		},
 		Logging: LoggingConfig{
 			Dir:           defaultLoggingDir,
@@ -163,4 +168,32 @@ func normalize(raw rawConfig) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func DefaultNotifyExtensions() []string {
+	return append([]string(nil), defaultScanNotifyExtensions...)
+}
+
+func normalizeNotifyExtensions(values []string) []string {
+	if values == nil {
+		return DefaultNotifyExtensions()
+	}
+
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		extension := strings.ToLower(strings.TrimSpace(value))
+		if extension == "" {
+			continue
+		}
+		if !strings.HasPrefix(extension, ".") {
+			extension = "." + extension
+		}
+		if _, ok := seen[extension]; ok {
+			continue
+		}
+		seen[extension] = struct{}{}
+		normalized = append(normalized, extension)
+	}
+	return normalized
 }

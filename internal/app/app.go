@@ -83,8 +83,10 @@ func (a *App) RunOnce(ctx context.Context, _ string) error {
 	}
 
 	allChanges := make([]snapshot.Change, 0)
+	notifyChanges := make([]snapshot.Change, 0)
 	failedMonitorCount := 0
 	scannedMonitorCount := 0
+	notifyExtensionSet := notifyExtensions(a.Config.Scan.NotifyExtensions)
 
 	for _, monitor := range a.Config.Monitors {
 		current, err := a.Scanner.Scan(monitor)
@@ -106,17 +108,21 @@ func (a *App) RunOnce(ctx context.Context, _ string) error {
 
 		changes := changesForMonitor(previous.Monitors[monitor.Name], current, exists, a.Config.Scan.NotifyOnFirstScan)
 		for _, change := range changes {
+			if !notifiesForExtension(change, notifyExtensionSet) {
+				continue
+			}
 			logFileChange(a, change)
+			notifyChanges = append(notifyChanges, change)
 		}
 		allChanges = append(allChanges, changes...)
 	}
 
-	changedLibraryIDs := snapshot.ChangedLibraryIDs(allChanges)
+	changedLibraryIDs := snapshot.ChangedLibraryIDs(notifyChanges)
 	notifySuccessCount := 0
 	notifyFailedCount := 0
 	logScanSummary := func() {
 		endedAt := time.Now()
-		addedCount, modifiedCount, deletedCount := changeCounts(allChanges)
+		addedCount, modifiedCount, deletedCount := changeCounts(notifyChanges)
 		elapsedSeconds := seconds1String(endedAt.Sub(startedAt))
 		a.logInfo("scan_summary", scanSummaryMessage(
 			len(a.Config.Monitors),
@@ -125,6 +131,7 @@ func (a *App) RunOnce(ctx context.Context, _ string) error {
 			addedCount,
 			modifiedCount,
 			deletedCount,
+			len(allChanges)-len(notifyChanges),
 			notifySuccessCount,
 			notifyFailedCount,
 		),
@@ -136,6 +143,7 @@ func (a *App) RunOnce(ctx context.Context, _ string) error {
 			logging.F("added_count", addedCount),
 			logging.F("modified_count", modifiedCount),
 			logging.F("deleted_count", deletedCount),
+			logging.F("ignored_change_count", len(allChanges)-len(notifyChanges)),
 			logging.F("notify_success_count", notifySuccessCount),
 			logging.F("notify_failed_count", notifyFailedCount),
 		)
@@ -217,9 +225,25 @@ func changeCounts(changes []snapshot.Change) (added, modified, deleted int) {
 	return added, modified, deleted
 }
 
-func scanSummaryMessage(monitorCount int, elapsedSeconds string, changedLibraryCount, addedCount, modifiedCount, deletedCount, notifySuccessCount, notifyFailedCount int) string {
+func scanSummaryMessage(monitorCount int, elapsedSeconds string, changedLibraryCount, addedCount, modifiedCount, deletedCount, ignoredChangeCount, notifySuccessCount, notifyFailedCount int) string {
 	if changedLibraryCount == 0 {
+		if ignoredChangeCount > 0 {
+			return fmt.Sprintf("扫描完成：%d 个目录，0 个需通知变化，忽略 %d 个其他变化，耗时 %ss", monitorCount, ignoredChangeCount, elapsedSeconds)
+		}
 		return fmt.Sprintf("扫描完成：%d 个目录，0 个变化，耗时 %ss", monitorCount, elapsedSeconds)
+	}
+	if ignoredChangeCount > 0 {
+		return fmt.Sprintf(
+			"扫描完成：%d 个目录，新增 %d，修改 %d，删除 %d；已通知 %d/%d，忽略 %d 个其他变化，耗时 %ss",
+			monitorCount,
+			addedCount,
+			modifiedCount,
+			deletedCount,
+			notifySuccessCount,
+			notifySuccessCount+notifyFailedCount,
+			ignoredChangeCount,
+			elapsedSeconds,
+		)
 	}
 	return fmt.Sprintf(
 		"扫描完成：%d 个目录，新增 %d，修改 %d，删除 %d；已通知 %d/%d，耗时 %ss",
@@ -295,6 +319,30 @@ func changesForMonitor(previous, current snapshot.MonitorSnapshot, stateExists, 
 	}
 
 	return snapshot.DiffMonitor(previous, current)
+}
+
+func notifyExtensions(extensions []string) map[string]struct{} {
+	if extensions == nil {
+		extensions = config.DefaultNotifyExtensions()
+	}
+
+	extensionSet := make(map[string]struct{}, len(extensions))
+	for _, extension := range extensions {
+		normalized := strings.ToLower(strings.TrimSpace(extension))
+		if normalized == "" {
+			continue
+		}
+		if !strings.HasPrefix(normalized, ".") {
+			normalized = "." + normalized
+		}
+		extensionSet[normalized] = struct{}{}
+	}
+	return extensionSet
+}
+
+func notifiesForExtension(change snapshot.Change, extensionSet map[string]struct{}) bool {
+	_, ok := extensionSet[strings.ToLower(filepath.Ext(change.Path))]
+	return ok
 }
 
 func logFileChange(a *App, change snapshot.Change) {

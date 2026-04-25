@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,10 @@ monitors:
 	if cfg.Scan.Interval != 5*time.Minute {
 		t.Fatalf("Scan.Interval = %v, want %v", cfg.Scan.Interval, 5*time.Minute)
 	}
+	wantNotifyExtensions := []string{".mp4", ".mkv", ".ts", ".m2ts", ".srt", ".ass", ".sup", ".pgs"}
+	if !reflect.DeepEqual(cfg.Scan.NotifyExtensions, wantNotifyExtensions) {
+		t.Fatalf("Scan.NotifyExtensions = %#v, want %#v", cfg.Scan.NotifyExtensions, wantNotifyExtensions)
+	}
 	if cfg.Logging.Dir != "logs" {
 		t.Fatalf("Logging.Dir = %q, want %q", cfg.Logging.Dir, "logs")
 	}
@@ -45,6 +50,33 @@ monitors:
 	}
 	if cfg.Monitors[0].LibraryID != "library-a" || cfg.Monitors[1].LibraryID != "library-a" {
 		t.Fatalf("library IDs = %#v, want duplicate library IDs preserved", cfg.Monitors)
+	}
+}
+
+func TestLoadNormalizesCustomNotifyExtensions(t *testing.T) {
+	path := writeConfig(t, `
+emby:
+  url: http://localhost:8096
+  api_key: secret
+scan:
+  notify_extensions:
+    - MKV
+    - ".SRT"
+    - " mkv "
+monitors:
+  - name: movies
+    path: /mnt/gd/sync/Movie1
+    library_id: library-a
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	want := []string{".mkv", ".srt"}
+	if !reflect.DeepEqual(cfg.Scan.NotifyExtensions, want) {
+		t.Fatalf("Scan.NotifyExtensions = %#v, want %#v", cfg.Scan.NotifyExtensions, want)
 	}
 }
 
