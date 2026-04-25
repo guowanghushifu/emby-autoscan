@@ -137,8 +137,8 @@ func TestRunOnceNotificationFailureStillSavesStateAndReturnsNil(t *testing.T) {
 
 	output := logs.String()
 	wantParts := []string{
-		"新增文件：Movie1 / movie1.mkv，0.0 GiB，媒体库 library-movies",
-		"新增文件：Movie2 / movie2.mkv，0.0 GiB，媒体库 library-shows",
+		"新增文件：Movie1 / movie1.mkv，0.0 GiB，媒体库ID library-movies",
+		"新增文件：Movie2 / movie2.mkv，0.0 GiB，媒体库ID library-shows",
 		"通知 Emby 扫描媒体库失败",
 		"扫描完成：2 个目录，新增 2，修改 0，删除 0；已通知 1/2，耗时 0.0s",
 	}
@@ -388,7 +388,9 @@ func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 
 	output := logs.String()
 	wantParts := []string{
-		"新增文件：Movie1 / added.mkv，0.0 GiB，媒体库 library-movies",
+		"新增文件：Movie1 / added.mkv，0.0 GiB，媒体库ID library-movies",
+		"修改文件：Movie1 / modified.mkv，0.0 GiB，媒体库ID library-movies",
+		"删除文件：Movie1 / deleted.mkv，0.0 GiB，媒体库ID library-movies",
 		"扫描完成：1 个目录，新增 1，修改 1，删除 1；已通知 1/1，耗时 0.0s",
 	}
 	for _, part := range wantParts {
@@ -401,8 +403,6 @@ func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 		"mod_time=",
 		"size=30",
 		"event=scan_start",
-		"检测到文件修改",
-		"检测到文件删除",
 		"event=notify_start",
 		"event=notify_success",
 		"event=state_save success=true",
@@ -417,6 +417,9 @@ func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 	}
 	if got := strings.Count(output, "event=scan_summary"); got != 0 {
 		t.Fatalf("stdout scan summary event count = %d, want no structured event fields in:\n%s", got, output)
+	}
+	if got := strings.Count(output, "文件：Movie1 /"); got != 3 {
+		t.Fatalf("file change log count = %d, want added, modified, and deleted logs in:\n%s", got, output)
 	}
 }
 

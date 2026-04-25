@@ -106,9 +106,7 @@ func (a *App) RunOnce(ctx context.Context, _ string) error {
 
 		changes := changesForMonitor(previous.Monitors[monitor.Name], current, exists, a.Config.Scan.NotifyOnFirstScan)
 		for _, change := range changes {
-			if change.Type == snapshot.ChangeAdded {
-				logFileChange(a, change)
-			}
+			logFileChange(a, change)
 		}
 		allChanges = append(allChanges, changes...)
 	}
@@ -322,7 +320,7 @@ func fileChangeMessage(a *App, change snapshot.Change) string {
 	}
 
 	return fmt.Sprintf(
-		"%s：%s / %s，%s GiB，媒体库 %s",
+		"%s：%s / %s，%s GiB，媒体库ID %s",
 		action,
 		change.MonitorName,
 		displayChangePath(a, change),
