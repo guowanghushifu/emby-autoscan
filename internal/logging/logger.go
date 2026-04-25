@@ -97,11 +97,10 @@ func (l *Logger) write(level, event, msg string, fields ...Field) {
 	if l.file != nil {
 		l.rotateDailyFile(now)
 	}
-	line := formatLine(now, level, event, msg, fields...)
 
-	_, _ = io.WriteString(l.stdout, line)
+	_, _ = io.WriteString(l.stdout, formatConsoleLine(now, level, msg))
 	if l.file != nil {
-		_, _ = io.WriteString(l.file, line)
+		_, _ = io.WriteString(l.file, formatStructuredLine(now, level, event, msg, fields...))
 	}
 }
 
@@ -128,12 +127,18 @@ func (l *Logger) rotateDailyFile(now time.Time) {
 	}
 }
 
-func formatLine(now time.Time, level, event, msg string, fields ...Field) string {
+func formatConsoleLine(now time.Time, level, msg string) string {
 	var builder strings.Builder
-	builder.WriteString(now.Format("2006-01-02 15:04:05"))
-	builder.WriteString(" [")
-	builder.WriteString(level)
-	builder.WriteString("] ")
+	writeLinePrefix(&builder, now, level)
+	builder.WriteString(msg)
+	builder.WriteByte('\n')
+
+	return builder.String()
+}
+
+func formatStructuredLine(now time.Time, level, event, msg string, fields ...Field) string {
+	var builder strings.Builder
+	writeLinePrefix(&builder, now, level)
 	builder.WriteString(msg)
 	builder.WriteString(" event=")
 	builder.WriteString(event)
@@ -147,6 +152,13 @@ func formatLine(now time.Time, level, event, msg string, fields ...Field) string
 	builder.WriteByte('\n')
 
 	return builder.String()
+}
+
+func writeLinePrefix(builder *strings.Builder, now time.Time, level string) {
+	builder.WriteString(now.Format("2006-01-02 15:04:05"))
+	builder.WriteString(" [")
+	builder.WriteString(level)
+	builder.WriteString("] ")
 }
 
 func (l *Logger) removeExpiredDailyFiles(now time.Time) error {

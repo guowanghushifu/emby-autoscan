@@ -137,12 +137,9 @@ func TestRunOnceNotificationFailureStillSavesStateAndReturnsNil(t *testing.T) {
 
 	output := logs.String()
 	wantParts := []string{
-		"library_id=library-movies",
-		"event=notify_failed",
-		"elapsed_seconds=0.0",
-		"error=\"emby unavailable\"",
-		"library_id=library-shows",
-		"event=scan_summary",
+		"新增文件：Movie1 / movie1.mkv，0.0 GiB，媒体库 library-movies",
+		"新增文件：Movie2 / movie2.mkv，0.0 GiB，媒体库 library-shows",
+		"通知 Emby 扫描媒体库失败",
 		"扫描完成：2 个目录，新增 2，修改 0，删除 0；已通知 1/2，耗时 0.0s",
 	}
 	for _, part := range wantParts {
@@ -170,13 +167,8 @@ func TestRunOnceStateSaveFailureLogsAndReturnsNil(t *testing.T) {
 
 	output := logs.String()
 	wantParts := []string{
-		"event=state_save",
 		"扫描状态保存失败",
-		"state_file=/tmp/state.json",
-		"success=false",
-		"error=\"disk full\"",
-		"event=scan_summary",
-		"changed_library_count=0",
+		"扫描完成：1 个目录，0 个变化，耗时 0.0s",
 	}
 	for _, part := range wantParts {
 		if !strings.Contains(output, part) {
@@ -269,7 +261,6 @@ func TestRunOnceSkipsScanWhenRcloneMountIsNotRunning(t *testing.T) {
 
 	output := logs.String()
 	wantParts := []string{
-		"event=rclone_mount_missing",
 		"未检测到 rclone mount 进程，跳过本轮扫描",
 	}
 	for _, part := range wantParts {
@@ -397,25 +388,8 @@ func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 
 	output := logs.String()
 	wantParts := []string{
-		"monitor_count=1",
-		"event=file_change",
 		"新增文件：Movie1 / added.mkv，0.0 GiB，媒体库 library-movies",
-		"monitor=Movie1",
-		"path=/media/movie1/added.mkv",
-		"library_id=library-movies",
-		"change_type=added",
-		"size_gib=0.0",
-		"event=scan_summary",
 		"扫描完成：1 个目录，新增 1，修改 1，删除 1；已通知 1/1，耗时 0.0s",
-		"elapsed_seconds=0.0",
-		"scanned_monitor_count=1",
-		"failed_monitor_count=0",
-		"changed_library_count=1",
-		"added_count=1",
-		"modified_count=1",
-		"deleted_count=1",
-		"notify_success_count=1",
-		"notify_failed_count=0",
 	}
 	for _, part := range wantParts {
 		if !strings.Contains(output, part) {
@@ -438,11 +412,11 @@ func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 			t.Fatalf("logs contain unwanted %q in:\n%s", unwanted, output)
 		}
 	}
-	if got := strings.Count(output, "event=file_change"); got != 1 {
-		t.Fatalf("file change log count = %d, want only added file logs in:\n%s", got, output)
+	if got := strings.Count(output, "event=file_change"); got != 0 {
+		t.Fatalf("stdout file change event count = %d, want no structured event fields in:\n%s", got, output)
 	}
-	if got := strings.Count(output, "event=scan_summary"); got != 1 {
-		t.Fatalf("scan summary log count = %d, want 1 in:\n%s", got, output)
+	if got := strings.Count(output, "event=scan_summary"); got != 0 {
+		t.Fatalf("stdout scan summary event count = %d, want no structured event fields in:\n%s", got, output)
 	}
 }
 
