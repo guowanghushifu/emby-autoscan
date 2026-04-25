@@ -47,21 +47,19 @@ type App struct {
 	stateCache  snapshot.State
 }
 
-func (a *App) RunOnce(ctx context.Context, cycleID string) error {
+func (a *App) RunOnce(ctx context.Context, _ string) error {
 	startedAt := time.Now()
 
 	if a.MountChecker != nil {
 		running, err := a.MountChecker.RcloneMountRunning()
 		if err != nil {
 			a.logError("rclone_mount_check_failed", "检测 rclone mount 进程失败，跳过本轮扫描",
-				logging.F("cycle_id", cycleID),
 				logging.F("error", err),
 			)
 			return nil
 		}
 		if !running {
 			a.logError("rclone_mount_missing", "未检测到 rclone mount 进程，跳过本轮扫描",
-				logging.F("cycle_id", cycleID),
 				logging.F("rclone_exe", "/usr/bin/rclone"),
 				logging.F("rclone_command", "mount"),
 			)
@@ -94,7 +92,6 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 				next.Monitors[monitor.Name] = previousMonitor
 			}
 			a.logError("scan_monitor_failed", "目录检测失败",
-				logging.F("cycle_id", cycleID),
 				logging.F("monitor", monitor.Name),
 				logging.F("library_id", monitor.LibraryID),
 				logging.F("error", err),
@@ -108,7 +105,7 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 		changes := changesForMonitor(previous.Monitors[monitor.Name], current, exists, a.Config.Scan.NotifyOnFirstScan)
 		for _, change := range changes {
 			if change.Type == snapshot.ChangeAdded {
-				logFileChange(a, cycleID, change)
+				logFileChange(a, change)
 			}
 		}
 		allChanges = append(allChanges, changes...)
@@ -121,9 +118,8 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 		endedAt := time.Now()
 		addedCount, modifiedCount, deletedCount := changeCounts(allChanges)
 		a.logInfo("scan_summary", scanSummaryMessage(len(changedLibraryIDs), notifySuccessCount, notifyFailedCount),
-			logging.F("cycle_id", cycleID),
 			logging.F("monitor_count", len(a.Config.Monitors)),
-			logging.F("elapsed_seconds", endedAt.Sub(startedAt).Seconds()),
+			logging.F("elapsed_seconds", seconds1String(endedAt.Sub(startedAt))),
 			logging.F("scanned_monitor_count", scannedMonitorCount),
 			logging.F("failed_monitor_count", failedMonitorCount),
 			logging.F("changed_library_count", len(changedLibraryIDs)),
@@ -141,10 +137,9 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 		if err := a.Notifier.RefreshLibrary(ctx, libraryID); err != nil {
 			notifyFailedCount++
 			a.logError("notify_failed", "通知 Emby 扫描媒体库失败",
-				logging.F("cycle_id", cycleID),
 				logging.F("library_id", libraryID),
 				logging.F("request_path", requestPath),
-				logging.F("elapsed_seconds", time.Since(notifyStartedAt).Seconds()),
+				logging.F("elapsed_seconds", seconds1String(time.Since(notifyStartedAt))),
 				logging.F("error", err),
 			)
 			continue
@@ -161,7 +156,6 @@ func (a *App) RunOnce(ctx context.Context, cycleID string) error {
 
 	if err := a.Store.Save(next); err != nil {
 		a.logError("state_save", "扫描状态保存失败",
-			logging.F("cycle_id", cycleID),
 			logging.F("state_file", a.stateFilePath()),
 			logging.F("success", false),
 			logging.F("error", err),
@@ -220,6 +214,14 @@ func scanSummaryMessage(changedLibraryCount, notifySuccessCount, notifyFailedCou
 	return fmt.Sprintf("扫描完成，通知成功 %d/%d", notifySuccessCount, notifySuccessCount+notifyFailedCount)
 }
 
+func seconds1(duration time.Duration) float64 {
+	return float64(duration.Round(100*time.Millisecond)) / float64(time.Second)
+}
+
+func seconds1String(duration time.Duration) string {
+	return fmt.Sprintf("%.1f", seconds1(duration))
+}
+
 func (a *App) Run(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -276,7 +278,7 @@ func changesForMonitor(previous, current snapshot.MonitorSnapshot, stateExists, 
 	return snapshot.DiffMonitor(previous, current)
 }
 
-func logFileChange(a *App, cycleID string, change snapshot.Change) {
+func logFileChange(a *App, change snapshot.Change) {
 	message := map[string]string{
 		snapshot.ChangeAdded:    "检测到文件新增",
 		snapshot.ChangeModified: "检测到文件修改",
@@ -287,14 +289,21 @@ func logFileChange(a *App, cycleID string, change snapshot.Change) {
 	}
 
 	a.logInfo("file_change", message,
-		logging.F("cycle_id", cycleID),
 		logging.F("monitor", change.MonitorName),
 		logging.F("path", change.Path),
 		logging.F("library_id", change.LibraryID),
 		logging.F("change_type", change.Type),
-		logging.F("size", change.Size),
-		logging.F("mod_time", change.ModTime),
+		logging.F("size_gib", gib1String(change.Size)),
 	)
+}
+
+func gib1(bytes int64) float64 {
+	const gib = 1024 * 1024 * 1024
+	return float64((bytes*10+gib/2)/gib) / 10
+}
+
+func gib1String(bytes int64) string {
+	return fmt.Sprintf("%.1f", gib1(bytes))
 }
 
 func newCycleID() string {

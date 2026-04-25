@@ -139,7 +139,7 @@ func TestRunOnceNotificationFailureStillSavesStateAndReturnsNil(t *testing.T) {
 	wantParts := []string{
 		"library_id=library-movies",
 		"event=notify_failed",
-		"elapsed_seconds=",
+		"elapsed_seconds=0.0",
 		"error=\"emby unavailable\"",
 		"library_id=library-shows",
 		"event=scan_summary",
@@ -172,7 +172,6 @@ func TestRunOnceStateSaveFailureLogsAndReturnsNil(t *testing.T) {
 	wantParts := []string{
 		"event=state_save",
 		"扫描状态保存失败",
-		"cycle_id=cycle-save-fail",
 		"state_file=/tmp/state.json",
 		"success=false",
 		"error=\"disk full\"",
@@ -272,7 +271,6 @@ func TestRunOnceSkipsScanWhenRcloneMountIsNotRunning(t *testing.T) {
 	wantParts := []string{
 		"event=rclone_mount_missing",
 		"未检测到 rclone mount 进程，跳过本轮扫描",
-		"cycle_id=cycle-rclone-down",
 	}
 	for _, part := range wantParts {
 		if !strings.Contains(output, part) {
@@ -399,7 +397,6 @@ func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 
 	output := logs.String()
 	wantParts := []string{
-		"cycle_id=cycle-4",
 		"monitor_count=1",
 		"event=file_change",
 		"检测到文件新增",
@@ -407,11 +404,10 @@ func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 		"path=/media/added.mkv",
 		"library_id=library-movies",
 		"change_type=added",
-		"size=30",
-		"mod_time=30",
+		"size_gib=0.0",
 		"event=scan_summary",
 		"扫描完成",
-		"elapsed_seconds=",
+		"elapsed_seconds=0.0",
 		"scanned_monitor_count=1",
 		"failed_monitor_count=0",
 		"changed_library_count=1",
@@ -427,6 +423,9 @@ func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 		}
 	}
 	for _, unwanted := range []string{
+		"cycle_id=",
+		"mod_time=",
+		"size=30",
 		"event=scan_start",
 		"检测到文件修改",
 		"检测到文件删除",
