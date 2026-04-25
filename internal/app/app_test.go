@@ -143,7 +143,7 @@ func TestRunOnceNotificationFailureStillSavesStateAndReturnsNil(t *testing.T) {
 		"error=\"emby unavailable\"",
 		"library_id=library-shows",
 		"event=scan_summary",
-		"通知成功 1/2",
+		"扫描完成：2 个目录，新增 2，修改 0，删除 0；已通知 1/2，耗时 0.0s",
 	}
 	for _, part := range wantParts {
 		if !strings.Contains(output, part) {
@@ -377,14 +377,14 @@ func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 	var logs bytes.Buffer
 	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
 		"Movie1": monitorSnapshot("Movie1", "library-movies",
-			fileInfo("/media/deleted.mkv", 10, 10),
-			fileInfo("/media/modified.mkv", 20, 20),
+			fileInfo("/media/movie1/deleted.mkv", 10, 10),
+			fileInfo("/media/movie1/modified.mkv", 20, 20),
 		),
 	}}
 	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
 		"Movie1": monitorSnapshot("Movie1", "library-movies",
-			fileInfo("/media/added.mkv", 30, 30),
-			fileInfo("/media/modified.mkv", 21, 21),
+			fileInfo("/media/movie1/added.mkv", 30, 30),
+			fileInfo("/media/movie1/modified.mkv", 21, 21),
 		),
 	}}
 	store := &fakeStore{state: previous, exists: true}
@@ -399,14 +399,14 @@ func TestRunOnceLogsAddedFilesAndSingleScanSummary(t *testing.T) {
 	wantParts := []string{
 		"monitor_count=1",
 		"event=file_change",
-		"检测到文件新增",
+		"新增文件：Movie1 / added.mkv，0.0 GiB，媒体库 library-movies",
 		"monitor=Movie1",
-		"path=/media/added.mkv",
+		"path=/media/movie1/added.mkv",
 		"library_id=library-movies",
 		"change_type=added",
 		"size_gib=0.0",
 		"event=scan_summary",
-		"扫描完成",
+		"扫描完成：1 个目录，新增 1，修改 1，删除 1；已通知 1/1，耗时 0.0s",
 		"elapsed_seconds=0.0",
 		"scanned_monitor_count=1",
 		"failed_monitor_count=0",

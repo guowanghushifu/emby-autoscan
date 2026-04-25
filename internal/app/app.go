@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/guowanghushifu/emby-autoscan/internal/config"
@@ -117,9 +119,19 @@ func (a *App) RunOnce(ctx context.Context, _ string) error {
 	logScanSummary := func() {
 		endedAt := time.Now()
 		addedCount, modifiedCount, deletedCount := changeCounts(allChanges)
-		a.logInfo("scan_summary", scanSummaryMessage(len(changedLibraryIDs), notifySuccessCount, notifyFailedCount),
+		elapsedSeconds := seconds1String(endedAt.Sub(startedAt))
+		a.logInfo("scan_summary", scanSummaryMessage(
+			len(a.Config.Monitors),
+			elapsedSeconds,
+			len(changedLibraryIDs),
+			addedCount,
+			modifiedCount,
+			deletedCount,
+			notifySuccessCount,
+			notifyFailedCount,
+		),
 			logging.F("monitor_count", len(a.Config.Monitors)),
-			logging.F("elapsed_seconds", seconds1String(endedAt.Sub(startedAt))),
+			logging.F("elapsed_seconds", elapsedSeconds),
 			logging.F("scanned_monitor_count", scannedMonitorCount),
 			logging.F("failed_monitor_count", failedMonitorCount),
 			logging.F("changed_library_count", len(changedLibraryIDs)),
@@ -207,11 +219,20 @@ func changeCounts(changes []snapshot.Change) (added, modified, deleted int) {
 	return added, modified, deleted
 }
 
-func scanSummaryMessage(changedLibraryCount, notifySuccessCount, notifyFailedCount int) string {
+func scanSummaryMessage(monitorCount int, elapsedSeconds string, changedLibraryCount, addedCount, modifiedCount, deletedCount, notifySuccessCount, notifyFailedCount int) string {
 	if changedLibraryCount == 0 {
-		return "扫描完成，无文件变化"
+		return fmt.Sprintf("扫描完成：%d 个目录，0 个变化，耗时 %ss", monitorCount, elapsedSeconds)
 	}
-	return fmt.Sprintf("扫描完成，通知成功 %d/%d", notifySuccessCount, notifySuccessCount+notifyFailedCount)
+	return fmt.Sprintf(
+		"扫描完成：%d 个目录，新增 %d，修改 %d，删除 %d；已通知 %d/%d，耗时 %ss",
+		monitorCount,
+		addedCount,
+		modifiedCount,
+		deletedCount,
+		notifySuccessCount,
+		notifySuccessCount+notifyFailedCount,
+		elapsedSeconds,
+	)
 }
 
 func seconds1(duration time.Duration) float64 {
@@ -279,14 +300,7 @@ func changesForMonitor(previous, current snapshot.MonitorSnapshot, stateExists, 
 }
 
 func logFileChange(a *App, change snapshot.Change) {
-	message := map[string]string{
-		snapshot.ChangeAdded:    "检测到文件新增",
-		snapshot.ChangeModified: "检测到文件修改",
-		snapshot.ChangeDeleted:  "检测到文件删除",
-	}[change.Type]
-	if message == "" {
-		message = "检测到文件变化"
-	}
+	message := fileChangeMessage(a, change)
 
 	a.logInfo("file_change", message,
 		logging.F("monitor", change.MonitorName),
@@ -295,6 +309,45 @@ func logFileChange(a *App, change snapshot.Change) {
 		logging.F("change_type", change.Type),
 		logging.F("size_gib", gib1String(change.Size)),
 	)
+}
+
+func fileChangeMessage(a *App, change snapshot.Change) string {
+	action := map[string]string{
+		snapshot.ChangeAdded:    "新增文件",
+		snapshot.ChangeModified: "修改文件",
+		snapshot.ChangeDeleted:  "删除文件",
+	}[change.Type]
+	if action == "" {
+		action = "文件变化"
+	}
+
+	return fmt.Sprintf(
+		"%s：%s / %s，%s GiB，媒体库 %s",
+		action,
+		change.MonitorName,
+		displayChangePath(a, change),
+		gib1String(change.Size),
+		change.LibraryID,
+	)
+}
+
+func displayChangePath(a *App, change snapshot.Change) string {
+	for _, monitor := range a.Config.Monitors {
+		if monitor.Name != change.MonitorName {
+			continue
+		}
+		relative, err := filepath.Rel(monitor.Path, change.Path)
+		if err == nil && relative != "." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && relative != ".." {
+			return filepath.ToSlash(relative)
+		}
+		break
+	}
+
+	base := filepath.Base(change.Path)
+	if base == "." || base == string(filepath.Separator) {
+		return change.Path
+	}
+	return base
 }
 
 func gib1(bytes int64) float64 {
