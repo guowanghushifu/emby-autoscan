@@ -62,6 +62,50 @@ func TestRunOnceCachesStateAndSkipsSaveWhenUnchanged(t *testing.T) {
 	}
 }
 
+func TestRunOnceSuppressesUnchangedSummaryByDefault(t *testing.T) {
+	var logs bytes.Buffer
+	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+	}}
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+	}}
+	store := &fakeStore{state: previous, exists: true}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{}, scanner, store, notifier, &logs)
+
+	if err := app.RunOnce(context.Background(), "cycle-unchanged"); err != nil {
+		t.Fatalf("RunOnce() error = %v", err)
+	}
+
+	if logs.String() != "" {
+		t.Fatalf("logs = %q, want no unchanged summary when debug is disabled", logs.String())
+	}
+}
+
+func TestRunOnceLogsUnchangedSummaryWhenDebugEnabled(t *testing.T) {
+	var logs bytes.Buffer
+	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+	}}
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
+	}}
+	store := &fakeStore{state: previous, exists: true}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{}, scanner, store, notifier, &logs)
+	app.Config.Logging.Debug = true
+
+	if err := app.RunOnce(context.Background(), "cycle-unchanged-debug"); err != nil {
+		t.Fatalf("RunOnce() error = %v", err)
+	}
+
+	want := "扫描完成：1 个目录，0 个变化，耗时 0.0s"
+	if !strings.Contains(logs.String(), want) {
+		t.Fatalf("logs missing %q in:\n%s", want, logs.String())
+	}
+}
+
 func TestRunOnceNotifyOnFirstScanNotifiesChangedLibraries(t *testing.T) {
 	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
 		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
@@ -248,12 +292,14 @@ func TestRunOnceStateSaveFailureLogsAndReturnsNil(t *testing.T) {
 	output := logs.String()
 	wantParts := []string{
 		"扫描状态保存失败",
-		"扫描完成：1 个目录，0 个变化，耗时 0.0s",
 	}
 	for _, part := range wantParts {
 		if !strings.Contains(output, part) {
 			t.Fatalf("logs missing %q in:\n%s", part, output)
 		}
+	}
+	if strings.Contains(output, "扫描完成：1 个目录，0 个变化") {
+		t.Fatalf("logs contain unchanged summary with debug disabled:\n%s", output)
 	}
 }
 

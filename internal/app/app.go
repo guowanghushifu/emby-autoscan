@@ -123,6 +123,10 @@ func (a *App) RunOnce(ctx context.Context, _ string) error {
 	logScanSummary := func() {
 		endedAt := time.Now()
 		addedCount, modifiedCount, deletedCount := changeCounts(notifyChanges)
+		ignoredChangeCount := len(allChanges) - len(notifyChanges)
+		if len(changedLibraryIDs) == 0 && ignoredChangeCount == 0 && !a.Config.Logging.Debug {
+			return
+		}
 		elapsedSeconds := seconds1String(endedAt.Sub(startedAt))
 		a.logInfo("scan_summary", scanSummaryMessage(
 			len(a.Config.Monitors),
@@ -131,7 +135,7 @@ func (a *App) RunOnce(ctx context.Context, _ string) error {
 			addedCount,
 			modifiedCount,
 			deletedCount,
-			len(allChanges)-len(notifyChanges),
+			ignoredChangeCount,
 			notifySuccessCount,
 			notifyFailedCount,
 		),
@@ -143,7 +147,7 @@ func (a *App) RunOnce(ctx context.Context, _ string) error {
 			logging.F("added_count", addedCount),
 			logging.F("modified_count", modifiedCount),
 			logging.F("deleted_count", deletedCount),
-			logging.F("ignored_change_count", len(allChanges)-len(notifyChanges)),
+			logging.F("ignored_change_count", ignoredChangeCount),
 			logging.F("notify_success_count", notifySuccessCount),
 			logging.F("notify_failed_count", notifyFailedCount),
 		)

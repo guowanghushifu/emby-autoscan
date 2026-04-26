@@ -42,6 +42,7 @@ type ScanConfig struct {
 type LoggingConfig struct {
 	Dir           string `yaml:"dir"`
 	RetentionDays int    `yaml:"retention_days"`
+	Debug         bool   `yaml:"debug"`
 }
 
 type MonitorConfig struct {
@@ -67,6 +68,7 @@ type rawScanConfig struct {
 type rawLoggingConfig struct {
 	Dir           string `yaml:"dir"`
 	RetentionDays *int   `yaml:"retention_days"`
+	Debug         bool   `yaml:"debug"`
 }
 
 func Load(path string) (Config, error) {
@@ -105,6 +107,7 @@ func normalize(raw rawConfig) (Config, error) {
 		Logging: LoggingConfig{
 			Dir:           defaultLoggingDir,
 			RetentionDays: defaultLoggingRetention,
+			Debug:         raw.Logging.Debug,
 		},
 		Monitors: make([]MonitorConfig, 0, len(raw.Monitors)),
 	}

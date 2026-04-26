@@ -19,6 +19,7 @@ scan:
 logging:
   dir: "logs"
   retention_days: 7
+  debug: false
 
 monitors:
   - name: "movie1"

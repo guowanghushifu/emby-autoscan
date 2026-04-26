@@ -42,6 +42,9 @@ monitors:
 	if cfg.Logging.RetentionDays != 7 {
 		t.Fatalf("Logging.RetentionDays = %d, want %d", cfg.Logging.RetentionDays, 7)
 	}
+	if cfg.Logging.Debug {
+		t.Fatalf("Logging.Debug = true, want default false")
+	}
 	if len(cfg.Monitors) != 2 {
 		t.Fatalf("len(Monitors) = %d, want 2", len(cfg.Monitors))
 	}
@@ -77,6 +80,30 @@ monitors:
 	want := []string{".mkv", ".srt"}
 	if !reflect.DeepEqual(cfg.Scan.NotifyExtensions, want) {
 		t.Fatalf("Scan.NotifyExtensions = %#v, want %#v", cfg.Scan.NotifyExtensions, want)
+	}
+}
+
+func TestLoadParsesLoggingDebug(t *testing.T) {
+	path := writeConfig(t, `
+emby:
+  url: http://localhost:8096
+  api_key: secret
+scan: {}
+logging:
+  debug: true
+monitors:
+  - name: movies
+    path: /mnt/gd/sync/Movie1
+    library_id: library-a
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if !cfg.Logging.Debug {
+		t.Fatalf("Logging.Debug = false, want true")
 	}
 }
 

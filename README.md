@@ -32,6 +32,7 @@ scan:
 logging:
   dir: "logs"
   retention_days: 7
+  debug: false
 
 monitors:
   - name: "movie1"
@@ -55,6 +56,7 @@ Fields:
 - `scan.notify_extensions`: File suffixes that should log file changes and refresh Emby. Matching is case-insensitive, and values may be written with or without the leading dot. Other suffixes still update the saved state, but do not produce file-change logs or Emby refresh requests.
 - `logging.dir`: Directory for daily log files. A relative value such as `logs` is resolved from the process working directory.
 - `logging.retention_days`: Number of daily log files to keep.
+- `logging.debug`: When `true`, unchanged scan cycles are logged. The default `false` suppresses routine "0 changes" cycle summaries.
 - `monitors[].name`: Unique local name for a monitored path.
 - `monitors[].path`: Absolute media directory path to scan.
 - `monitors[].library_id`: Emby library item ID to refresh when that path changes.
