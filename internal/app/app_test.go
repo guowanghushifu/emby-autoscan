@@ -107,13 +107,14 @@ func TestRunOnceLogsUnchangedSummaryWhenDebugEnabled(t *testing.T) {
 }
 
 func TestRunOnceNotifyOnFirstScanNotifiesChangedLibraries(t *testing.T) {
+	var logs bytes.Buffer
 	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
 		"Movie1": monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1.mkv", 100, 1000)),
 		"Empty":  monitorSnapshot("Empty", "library-empty"),
 	}}
 	store := &fakeStore{}
 	notifier := &fakeNotifier{}
-	app := newTestApp(t, config.ScanConfig{NotifyOnFirstScan: true}, scanner, store, notifier, nil)
+	app := newTestApp(t, config.ScanConfig{NotifyOnFirstScan: true}, scanner, store, notifier, &logs)
 
 	if err := app.RunOnce(context.Background(), "cycle-1"); err != nil {
 		t.Fatalf("RunOnce() error = %v", err)
@@ -123,7 +124,13 @@ func TestRunOnceNotifyOnFirstScanNotifiesChangedLibraries(t *testing.T) {
 	if !reflect.DeepEqual(notifier.libraryIDs, wantLibraries) {
 		t.Fatalf("notified library IDs = %#v, want %#v", notifier.libraryIDs, wantLibraries)
 	}
-	assertSavedMonitors(t, store, []string{"Empty", "Movie1"})
+	assertSavedMonitors(t, store, []string{"Movie1"})
+	if strings.Contains(logs.String(), "library-empty") {
+		t.Fatalf("empty monitor triggered notification log in:\n%s", logs.String())
+	}
+	if !strings.Contains(logs.String(), "目录为空，可能是挂载异常，跳过此目录") {
+		t.Fatalf("logs missing empty monitor warning in:\n%s", logs.String())
+	}
 }
 
 func TestRunOnceDeduplicatesSameLibraryAcrossMonitors(t *testing.T) {
@@ -333,6 +340,47 @@ func TestRunOnceSkipsStateUpdateForFailedMonitor(t *testing.T) {
 	wantLibraries := []string{"library-shows"}
 	if !reflect.DeepEqual(notifier.libraryIDs, wantLibraries) {
 		t.Fatalf("notified library IDs = %#v, want %#v", notifier.libraryIDs, wantLibraries)
+	}
+}
+
+func TestRunOnceTreatsEmptyMonitorAsFailureAndPreservesState(t *testing.T) {
+	var logs bytes.Buffer
+	oldMovie1 := monitorSnapshot("Movie1", "library-movies", fileInfo("/media/movie1/old.mkv", 10, 10))
+	previous := snapshot.State{Version: 1, Monitors: map[string]snapshot.MonitorSnapshot{
+		"Movie1": oldMovie1,
+	}}
+	scanner := &fakeScanner{snapshots: map[string]snapshot.MonitorSnapshot{
+		"Movie1": monitorSnapshot("Movie1", "library-movies"),
+	}}
+	store := &fakeStore{state: previous, exists: true}
+	notifier := &fakeNotifier{}
+	app := newTestApp(t, config.ScanConfig{}, scanner, store, notifier, &logs)
+
+	if err := app.RunOnce(context.Background(), "cycle-empty-monitor"); err != nil {
+		t.Fatalf("RunOnce() error = %v", err)
+	}
+
+	if store.saveCount != 0 {
+		t.Fatalf("Save() count = %d, want 0 because preserved state is unchanged", store.saveCount)
+	}
+	if got := app.stateCache.Monitors["Movie1"]; !reflect.DeepEqual(got, oldMovie1) {
+		t.Fatalf("cached Movie1 snapshot = %#v, want preserved %#v", got, oldMovie1)
+	}
+	if len(notifier.libraryIDs) != 0 {
+		t.Fatalf("notified library IDs = %#v, want none for empty monitor", notifier.libraryIDs)
+	}
+	output := logs.String()
+	wantParts := []string{
+		"目录为空，可能是挂载异常，跳过此目录",
+		"Movie1",
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(output, part) {
+			t.Fatalf("logs missing %q in:\n%s", part, output)
+		}
+	}
+	if strings.Contains(output, "删除文件") {
+		t.Fatalf("logs contain deletion from empty monitor in:\n%s", output)
 	}
 }
 

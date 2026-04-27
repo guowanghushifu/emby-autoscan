@@ -95,10 +95,23 @@ func (a *App) RunOnce(ctx context.Context, _ string) error {
 			if previousMonitor, ok := previous.Monitors[monitor.Name]; ok {
 				next.Monitors[monitor.Name] = previousMonitor
 			}
-			a.logError("scan_monitor_failed", "目录检测失败",
+			a.logError("scan_monitor_failed", fmt.Sprintf("目录检测失败，跳过此目录：%s", monitor.Name),
 				logging.F("monitor", monitor.Name),
+				logging.F("path", monitor.Path),
 				logging.F("library_id", monitor.LibraryID),
 				logging.F("error", err),
+			)
+			continue
+		}
+		if len(current.Files) == 0 {
+			failedMonitorCount++
+			if previousMonitor, ok := previous.Monitors[monitor.Name]; ok {
+				next.Monitors[monitor.Name] = previousMonitor
+			}
+			a.logError("scan_monitor_empty", fmt.Sprintf("目录为空，可能是挂载异常，跳过此目录：%s", monitor.Name),
+				logging.F("monitor", monitor.Name),
+				logging.F("path", monitor.Path),
+				logging.F("library_id", monitor.LibraryID),
 			)
 			continue
 		}
