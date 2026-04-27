@@ -13,7 +13,7 @@ build_archive() {
   target_goarch="$1"
   package_name="${APP_NAME}-${GOOS}-${target_goarch}"
   package_dir="${OUTPUT_DIR}/${package_name}"
-  binary_path="${package_dir}/${APP_NAME}"
+  binary_path="${package_dir}/${package_name}"
   archive_path="${OUTPUT_DIR}/${package_name}.tar.gz"
 
   rm -rf "$package_dir" "$archive_path"
@@ -30,7 +30,6 @@ build_archive() {
       -ldflags "-s -w -X main.version=${VERSION}" \
       -o "$binary_path" \
       "$CMD_PATH"
-  cp "$binary_path" "${package_dir}/${package_name}"
 
   cp config.example.yaml "${package_dir}/config.example.yaml"
   cp run-forever.sh "${package_dir}/run-forever.sh"
