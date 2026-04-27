@@ -30,10 +30,11 @@ build_archive() {
       -ldflags "-s -w -X main.version=${VERSION}" \
       -o "$binary_path" \
       "$CMD_PATH"
+  cp "$binary_path" "${package_dir}/${package_name}"
 
   cp config.example.yaml "${package_dir}/config.example.yaml"
-  cp README.md "${package_dir}/README.md"
-  cp deploy/emby-autoscan.service "${package_dir}/emby-autoscan.service"
+  cp run-forever.sh "${package_dir}/run-forever.sh"
+  chmod +x "${package_dir}/run-forever.sh"
 
   tar -C "$OUTPUT_DIR" -czf "$archive_path" "$package_name"
   rm -rf "$package_dir"
